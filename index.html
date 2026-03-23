@@ -260,6 +260,255 @@ optgroup option{color:var(--text);}
   .fac-grid{grid-template-columns:1fr 1fr;}
   #drawer{width:100vw;}
 }
+
+/* ══════════════════════════════════
+   AX AI 분석 패널
+══════════════════════════════════ */
+.ax-section { margin-bottom: 20px; }
+
+.ax-panel {
+  background: linear-gradient(135deg, #0a1628 0%, #0e2040 50%, #0a1a30 100%);
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+}
+.ax-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top left, rgba(0,229,255,0.06) 0%, transparent 60%);
+  pointer-events: none;
+}
+.ax-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(0,229,255,0.2);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ax-header-l { display: flex; align-items: center; gap: 10px; }
+.ax-badge {
+  background: linear-gradient(135deg, var(--accent), #0066cc);
+  color: #000;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 16px;
+  letter-spacing: 2px;
+  padding: 3px 10px;
+  border-radius: 4px;
+}
+.ax-title { font-size: 13px; font-weight: 700; color: #fff; }
+.ax-sub { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.ax-btn {
+  background: linear-gradient(135deg, rgba(0,229,255,0.15), rgba(0,102,204,0.15));
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 7px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--sans);
+  font-weight: 700;
+  transition: all .2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.ax-btn:hover { background: rgba(0,229,255,0.25); transform: translateY(-1px); }
+.ax-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.ax-btn-analyze { background: linear-gradient(135deg,rgba(0,255,176,.15),rgba(0,180,100,.15)); border-color: var(--green); color: var(--green); }
+.ax-btn-analyze:hover { background: rgba(0,255,176,.25); }
+
+.ax-body { padding: 0 20px 20px; }
+
+/* 탭 */
+.ax-tabs { display: flex; gap: 4px; padding: 14px 0 10px; flex-wrap: wrap; }
+.ax-tab {
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text3);
+  transition: all .2s;
+  font-family: var(--sans);
+}
+.ax-tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.ax-tab-content { display: none; }
+.ax-tab-content.active { display: block; }
+
+/* AI 응답 출력 */
+.ax-output {
+  min-height: 120px;
+  background: rgba(0,0,0,.2);
+  border: 1px solid rgba(0,229,255,.1);
+  border-radius: 10px;
+  padding: 16px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text2);
+  white-space: pre-wrap;
+  word-break: keep-all;
+  position: relative;
+}
+.ax-output.streaming { border-color: rgba(0,229,255,.4); }
+.ax-output.streaming::after {
+  content: '▋';
+  display: inline-block;
+  animation: blink .7s step-end infinite;
+  color: var(--accent);
+  margin-left: 2px;
+}
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+
+.ax-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+  color: var(--text3);
+}
+.ax-placeholder-ico { font-size: 36px; opacity: .5; }
+.ax-placeholder-txt { font-size: 12px; text-align: center; line-height: 1.6; }
+
+/* AI 분석 결과 포맷 */
+.ax-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 1.5px;
+  margin: 12px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(0,229,255,.15);
+}
+.ax-risk-item {
+  display: flex;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  margin-bottom: 5px;
+  background: rgba(0,0,0,.15);
+  border-left: 3px solid;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.ax-risk-lv { font-family: var(--mono); font-size: 9px; font-weight: 700; white-space: nowrap; padding-top: 1px; }
+
+/* 예측 카드 행 */
+.ax-predict-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-top: 8px; }
+.ax-predict-card {
+  background: rgba(0,0,0,.2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+.ax-predict-time { font-family: var(--mono); font-size: 9px; color: var(--text3); margin-bottom: 4px; }
+.ax-predict-score { font-family: 'Bebas Neue', cursive; font-size: 28px; line-height: 1; }
+.ax-predict-label { font-size: 9px; margin-top: 2px; }
+
+/* 채팅 인터페이스 */
+.ax-chat { display: flex; flex-direction: column; gap: 10px; }
+.ax-chat-history {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.ax-chat-history::-webkit-scrollbar { width: 3px; }
+.ax-chat-history::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+.ax-msg {
+  padding: 9px 13px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  max-width: 90%;
+  word-break: keep-all;
+}
+.ax-msg.user {
+  background: rgba(0,229,255,.1);
+  border: 1px solid rgba(0,229,255,.2);
+  color: #cce8ff;
+  align-self: flex-end;
+  border-radius: 10px 10px 2px 10px;
+}
+.ax-msg.ai {
+  background: rgba(0,255,176,.07);
+  border: 1px solid rgba(0,255,176,.15);
+  color: var(--text2);
+  align-self: flex-start;
+  border-radius: 10px 10px 10px 2px;
+  white-space: pre-wrap;
+}
+.ax-msg.ai.thinking {
+  color: var(--text3);
+  font-style: italic;
+  animation: fadeInOut 1.5s infinite;
+}
+@keyframes fadeInOut { 0%,100%{opacity:.5;} 50%{opacity:1;} }
+.ax-chat-input-row { display: flex; gap: 8px; }
+.ax-chat-input {
+  flex: 1;
+  background: rgba(0,0,0,.3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 9px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: var(--sans);
+  outline: none;
+  transition: border-color .2s;
+}
+.ax-chat-input:focus { border-color: var(--accent); }
+.ax-chat-send {
+  background: var(--accent);
+  border: none;
+  color: #000;
+  padding: 9px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  transition: all .2s;
+}
+.ax-chat-send:hover { background: #00aadd; }
+.ax-chat-send:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 빠른 질문 버튼 */
+.ax-quick-btns { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+.ax-qbtn {
+  background: rgba(0,229,255,.08);
+  border: 1px solid rgba(0,229,255,.2);
+  color: var(--text3);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all .2s;
+  font-family: var(--sans);
+}
+.ax-qbtn:hover { background: rgba(0,229,255,.2); color: var(--text); }
+
+/* 토큰 사용량 */
+.ax-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  border-top: 1px solid rgba(0,229,255,.1);
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--text3);
+}
 </style>
 </head>
 <body>
@@ -396,6 +645,111 @@ optgroup option{color:var(--text);}
     <div class="sh-note">클릭 → 기상 영향 케이스 상세 분석</div>
   </div>
   <div class="fac-grid" id="facilityGrid"></div>
+
+  <!-- ══ AX AI 분석 패널 ══ -->
+  <div class="ax-section">
+    <div class="sh">
+      <div class="sh-title">🤖 AX · AI 실시간 분석</div>
+      <div class="sh-line"></div>
+      <div class="sh-note">Claude AI 기반 · 현재 기상 데이터 자동 연동</div>
+    </div>
+
+    <div class="ax-panel">
+      <div class="ax-header">
+        <div class="ax-header-l">
+          <div class="ax-badge">AX</div>
+          <div>
+            <div class="ax-title">AI 설비 영향 분석 엔진</div>
+            <div class="ax-sub">Claude AI · 현재 기상 + 방지시설 데이터 실시간 분석</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="ax-btn ax-btn-analyze" onclick="runAIAnalysis()" id="btnAnalyze">
+            🧠 AI 종합 분석 실행
+          </button>
+          <button class="ax-btn" onclick="runAIPredict()" id="btnPredict">
+            📈 EMI 예측
+          </button>
+        </div>
+      </div>
+
+      <div class="ax-body">
+        <!-- 탭 -->
+        <div class="ax-tabs">
+          <button class="ax-tab active" onclick="switchAxTab(this,'tab-analyze')">종합 분석</button>
+          <button class="ax-tab" onclick="switchAxTab(this,'tab-risk');runRiskEval()">리스크 평가</button>
+          <button class="ax-tab" onclick="switchAxTab(this,'tab-predict')">EMI 예측</button>
+          <button class="ax-tab" onclick="switchAxTab(this,'tab-chat')">AI 질의응답</button>
+        </div>
+
+        <!-- 탭 1: 종합 분석 -->
+        <div class="ax-tab-content active" id="tab-analyze">
+          <div id="analyzeOutput" class="ax-output">
+            <div class="ax-placeholder">
+              <div class="ax-placeholder-ico">🧠</div>
+              <div class="ax-placeholder-txt">
+                <strong style="color:#cce0ff;">"AI 종합 분석 실행"</strong> 버튼을 클릭하면<br>
+                현재 기상 데이터를 기반으로 Claude AI가<br>
+                방지시설별 리스크와 대응방안을 분석합니다
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 탭 2: 리스크 평가 -->
+        <div class="ax-tab-content" id="tab-risk">
+          <div id="riskOutput" class="ax-output">
+            <div class="ax-placeholder">
+              <div class="ax-placeholder-ico">⚡</div>
+              <div class="ax-placeholder-txt">
+                AI 분석 실행 후 방지시설별<br>
+                상세 리스크 평가가 표시됩니다
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 탭 3: EMI 예측 -->
+        <div class="ax-tab-content" id="tab-predict">
+          <div id="predictOutput">
+            <div class="ax-placeholder" style="min-height:80px;">
+              <div class="ax-placeholder-ico">📈</div>
+              <div class="ax-placeholder-txt">
+                "EMI 예측" 버튼 클릭 시<br>
+                향후 기상 변화에 따른 EMI 추이를 AI가 예측합니다
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 탭 4: AI 질의응답 -->
+        <div class="ax-tab-content" id="tab-chat">
+          <div class="ax-chat">
+            <div class="ax-quick-btns">
+              <button class="ax-qbtn" onclick="quickAsk('지금 가장 위험한 방지시설은?')">⚠ 가장 위험한 시설</button>
+              <button class="ax-qbtn" onclick="quickAsk('백필터 지금 상태 분석해줘')">🏭 백필터 분석</button>
+              <button class="ax-qbtn" onclick="quickAsk('오늘 기상 조건에서 TMS 초과 가능성은?')">📊 TMS 초과 가능성</button>
+              <button class="ax-qbtn" onclick="quickAsk('지금 바로 해야 할 조치 알려줘')">🚨 즉시 조치</button>
+              <button class="ax-qbtn" onclick="quickAsk('내일 기상 변화에 대비한 점검 계획 세워줘')">📅 점검 계획</button>
+              <button class="ax-qbtn" onclick="quickAsk('풍향이 방지시설에 미치는 영향은?')">💨 풍향 영향</button>
+            </div>
+            <div class="ax-chat-history" id="chatHistory"></div>
+            <div class="ax-chat-input-row">
+              <input class="ax-chat-input" id="chatInput" type="text"
+                placeholder="방지시설, 기상, 대응방안 등 무엇이든 질문하세요..."
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){sendChat();event.preventDefault();}">
+              <button class="ax-chat-send" id="chatSend" onclick="sendChat()">▶</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ax-footer">
+        <span id="axModel">⚪ API 키 미설정 · claude-sonnet-4-20250514 · 분석 버튼 클릭 시 입력</span>
+        <span id="axTokens">대기 중</span>
+      </div>
+    </div>
+  </div>
 
   <!-- 하단 -->
   <div class="bot-grid">
@@ -718,15 +1072,20 @@ function degToDir(deg) {
 // ════════════════════════════════════════
 // Open-Meteo 실시간 API (CORS 허용)
 // ════════════════════════════════════════
-// 타임아웃 fetch 헬퍼
+// 타임아웃 fetch 헬퍼 (AbortController 미지원 브라우저 대비)
 function fetchWithTimeout(url, ms = 8000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { signal: ctrl.signal })
-    .finally(() => clearTimeout(timer));
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    return fetch(url, { signal: ctrl.signal })
+      .finally(() => clearTimeout(timer));
+  } catch(e) {
+    // AbortController 미지원 → 일반 fetch
+    return fetch(url);
+  }
 }
 
-// API 소스 1: Open-Meteo (무료, CORS 허용)
+// API 소스 1: Open-Meteo (무료, CORS 허용, GitHub Pages에서 정상 동작)
 async function fetchOpenMeteo(coord) {
   const p = new URLSearchParams({
     latitude: coord.lat, longitude: coord.lon,
@@ -736,7 +1095,17 @@ async function fetchOpenMeteo(coord) {
     timezone: 'Asia/Seoul',
     forecast_days: 1
   });
-  const res = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?${p}`, 8000);
+
+  // 직접 호출 먼저
+  const directUrl = `https://api.open-meteo.com/v1/forecast?${p}`;
+  let res;
+  try {
+    res = await fetchWithTimeout(directUrl, 8000);
+  } catch(e) {
+    // 직접 실패 시 CORS 프록시 경유
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(directUrl)}`;
+    res = await fetchWithTimeout(proxyUrl, 8000);
+  }
   if (!res.ok) throw new Error('Open-Meteo HTTP ' + res.status);
   const j = await res.json();
   if (!j.current) throw new Error('Open-Meteo 데이터 없음');
@@ -1448,6 +1817,335 @@ function switchGuide(btn, id) {
   btn.classList.add('active');
   document.getElementById('guide-'+id).classList.add('active');
 }
+
+
+// ════════════════════════════════════════
+// AX · Claude AI 분석 엔진 (기술 검증 가이드 전용)
+// ════════════════════════════════════════
+
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const CLAUDE_API   = 'https://api.anthropic.com/v1/messages';
+
+function getApiKey() {
+  return localStorage.getItem('emi_claude_key') || '';
+}
+
+// fetch 오버라이드 - Claude API 호출 시 키 자동 주입
+const _origFetch = window.fetch.bind(window);
+window.fetch = function(url, opts) {
+  opts = opts || {};
+  if (typeof url === 'string' && url.includes('anthropic.com')) {
+    const key = getApiKey();
+    opts = Object.assign({}, opts);
+    opts.headers = Object.assign({}, opts.headers || {});
+    if (key) opts.headers['x-api-key'] = key;
+    opts.headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  }
+  return _origFetch(url, opts);
+};
+
+let chatMessages = [];
+
+// 현재 기상 컨텍스트 빌드
+function buildWeatherContext() {
+  if (!weatherData) return '기상 데이터 없음';
+  const w = weatherData;
+  const emi = calcEMI(w);
+  const lv  = emiLevel(emi.total);
+  const facLines = FACILITIES.map(f => {
+    const r = calcFacilityEMI(f, w);
+    const lv2 = emiLevel(r.score);
+    return '  ' + f.fullName + ': EMI ' + r.score + '점(' + lv2.level + ')' +
+      (r.issues.length ? ' | ' + r.issues.join(', ') : ' | 이상없음');
+  }).join('\n');
+  return '【현재 기상 · ' + currentRegion + ' · ' + new Date().toLocaleTimeString('ko-KR') + '】\n' +
+    '기온: ' + w.TMP + '°C (체감 ' + (w.ATMP || '--') + '°C)\n' +
+    '습도: ' + w.REH + '%\n' +
+    '풍속: ' + w.WSD + 'm/s / 돌풍: ' + (w.WSG || '--') + 'm/s\n' +
+    '풍향: ' + w.VEC_STR + '(' + w.VEC_DEG + '°)\n' +
+    '강수: ' + w.PCP + 'mm/h\n' +
+    '기압: ' + w.PRS + 'hPa\n\n' +
+    '【EMI 종합 ' + emi.total + '/100 · ' + lv.level + '】\n' +
+    '온도' + emi.factors.temp + '/습도' + emi.factors.hum + '/풍속' + emi.factors.wind +
+    '/강수' + emi.factors.rain + '/기압' + emi.factors.press + '\n\n' +
+    '【방지시설 현황】\n' + facLines;
+}
+
+// 시스템 프롬프트 - 기술 검증된 사항만
+const SYSTEM_PROMPT = '당신은 여수 석유화학산단 대기오염 방지시설 전문 분석 AI입니다.\n\n' +
+  '【반드시 준수할 원칙】\n' +
+  '1. 국내외 공인 기준·법령·학술적으로 이견 없이 확립된 사실만 안내합니다\n' +
+  '2. 모든 수치는 출처(법령명·고시·기술기준명)를 반드시 명시합니다\n' +
+  '3. 현재 측정된 기상 수치를 직접 인용하여 판단 근거를 제시합니다\n' +
+  '4. 추정·예측 표현은 기상학적으로 확립된 패턴에 한해서만 사용합니다\n' +
+  '5. 사업장별로 다를 수 있는 내용, 논란이 있는 내용은 안내하지 않습니다\n' +
+  '6. 모호한 표현 없이 조건-결과 형식으로 명확하게 작성합니다\n' +
+  '   예: "현재 습도 OO%는 임계값 80% 초과 → 여과포 차압 1.5배 이상 상승 확인됨(KOSHA 2022)"\n\n' +
+  '전문 기준: 대기환경보전법·방지시설운영기술기준(국립환경과학원)·KOSHA GUIDE·KS 표준·TMS운영지침\n' +
+  '답변: 간결·실무적·수치 명시·한국어';
+
+// 공통 Claude API 호출
+async function callClaude(messages, maxTokens) {
+  maxTokens = maxTokens || 1000;
+  if (!getApiKey()) { showApiKeyModal(); throw new Error('API_KEY_REQUIRED'); }
+  const res = await fetch(CLAUDE_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: maxTokens,
+      system: SYSTEM_PROMPT, messages: messages })
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(function(){ return {}; });
+    throw new Error(e.error ? e.error.message : 'HTTP ' + res.status);
+  }
+  const data = await res.json();
+  const tokEl = document.getElementById('axTokens');
+  if (tokEl) tokEl.textContent = '입력 ' + (data.usage ? data.usage.input_tokens : 0) +
+    ' + 출력 ' + (data.usage ? data.usage.output_tokens : 0) + ' 토큰';
+  return (data.content && data.content[0]) ? data.content[0].text : '';
+}
+
+// 탭 전환
+function switchAxTab(btn, id) {
+  document.querySelectorAll('.ax-tab').forEach(function(b){ b.classList.remove('active'); });
+  document.querySelectorAll('.ax-tab-content').forEach(function(c){ c.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+
+// 타이핑 효과
+async function typeOut(el, text) {
+  el.textContent = '';
+  for (var i = 0; i < text.length; i++) {
+    el.textContent += text[i];
+    if (i % 5 === 0) await new Promise(function(r){ setTimeout(r, 6); });
+  }
+}
+
+// ── 탭1: 종합 분석 ──
+async function runAIAnalysis() {
+  if (!weatherData) { alert('새로고침으로 기상 데이터를 먼저 수집하세요'); return; }
+  var btn = document.getElementById('btnAnalyze');
+  var out = document.getElementById('analyzeOutput');
+  btn.disabled = true; btn.textContent = '⏳ 분석 중...';
+  out.className = 'ax-output streaming'; out.textContent = '';
+  document.querySelectorAll('.ax-tab')[0].click();
+
+  var prompt = '아래 실측 기상 데이터를 기반으로 방지시설 종합 분석을 수행하세요.\n' +
+    '공인 기술 기준과 법령 근거를 수치와 함께 명시합니다.\n\n' +
+    buildWeatherContext() + '\n\n' +
+    '다음 형식으로 작성하세요:\n\n' +
+    '## 🎯 현황 요약\n(현재 기상 수치 인용, 3줄 이내, EMI 수준 판정 근거 포함)\n\n' +
+    '## ⚡ 위험 리스크 (공인 기준 근거)\n' +
+    '각 리스크:\n[시설명] | 위험도: 위험/주의/경계/정상\n' +
+    '- 원인: 현재 [측정값]이 임계값 [기준값] 초과/미만 (출처: 법령/고시명)\n' +
+    '- 영향: [수치 포함 구체적 기술 영향]\n\n' +
+    '## 🔧 즉시 조치사항 (이견 없는 확립된 조치만)\n' +
+    '- [시설] [조치] → 기준수치 (근거: OOO)\n\n' +
+    '## 📊 운전 파라미터 조정 권고 (기술기준 범위 내)\n' +
+    '- [시설] [파라미터]: [현재값] → [조정값] (근거: OOO)\n\n' +
+    '## 📅 모니터링 포인트 (TMS·계측값 기준)\n' +
+    '- [감시항목]: [주기] / 조치기준 [수치] (근거: OOO)';
+
+  try {
+    var text = await callClaude([{role:'user', content: prompt}], 1300);
+    out.className = 'ax-output';
+    await typeOut(out, text);
+  } catch(e) {
+    out.className = 'ax-output';
+    if (e.message !== 'API_KEY_REQUIRED') out.textContent = '⚠ ' + e.message;
+  }
+  btn.disabled = false; btn.textContent = '🧠 AI 종합 분석';
+}
+
+// ── 탭2: 리스크 평가 ──
+async function runRiskEval() {
+  if (!weatherData) { alert('기상 데이터 필요'); return; }
+  var out = document.getElementById('riskOutput');
+  out.className = 'ax-output streaming'; out.textContent = '';
+
+  var prompt = '현재 기상 데이터 기준 방지시설별 리스크를 평가하세요.\n' +
+    '법령·고시·공인 기술기준에 명시된 수치 기준만 사용합니다.\n\n' +
+    buildWeatherContext() + '\n\n' +
+    '각 방지시설(백필터/습식세정탑/전기집진기/RTO)별:\n' +
+    '[시설명]\n' +
+    '- 위험도: 위험/주의/경계/정상\n' +
+    '- 임계 초과 항목: [파라미터] 현재 __[단위] / 기준 __[단위] (출처: __)\n' +
+    '- 기술적 영향: [수치 포함]\n' +
+    '- TMS 기준 초과 위험: 있음/없음 (배출허용기준: __)';
+
+  try {
+    var text = await callClaude([{role:'user', content: prompt}], 1000);
+    out.className = 'ax-output';
+    await typeOut(out, text);
+  } catch(e) {
+    out.className = 'ax-output';
+    if (e.message !== 'API_KEY_REQUIRED') out.textContent = '⚠ ' + e.message;
+  }
+}
+
+// ── 탭3: EMI 예측 ──
+async function runAIPredict() {
+  if (!weatherData) { alert('기상 데이터 필요'); return; }
+  var btn = document.getElementById('btnPredict');
+  btn.disabled = true; btn.textContent = '⏳ 예측 중...';
+  document.querySelectorAll('.ax-tab')[2].click();
+  var out = document.getElementById('predictOutput');
+  out.innerHTML = '<div class="ax-placeholder"><div class="ax-placeholder-ico">🔮</div><div class="ax-placeholder-txt">기상 패턴 분석 중...</div></div>';
+
+  var prompt = '현재 기상과 기상학적 확립 패턴(일교차·해풍육풍·계절특성)으로 EMI를 예측하세요.\n' +
+    '불확실한 예측 제외, 확립된 패턴만 반영합니다.\n\n' +
+    buildWeatherContext() + '\n\n' +
+    'JSON만 출력:\n{"predictions":[' +
+    '{"hour":"+1h","emi":숫자,"level":"정상|경계|주의|위험","reason":"기상학적근거"},' +
+    '{"hour":"+2h","emi":숫자,"level":"정상|경계|주의|위험","reason":"기상학적근거"},' +
+    '{"hour":"+3h","emi":숫자,"level":"정상|경계|주의|위험","reason":"기상학적근거"},' +
+    '{"hour":"+6h","emi":숫자,"level":"정상|경계|주의|위험","reason":"기상학적근거"}' +
+    '],"trend":"상승|하강|유지","peak":"최대위험시간대","action":"사전대비조치한줄"}';
+
+  try {
+    var raw  = await callClaude([{role:'user', content: prompt}], 500);
+    var pred = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    var lc   = {'정상':'var(--green)','경계':'var(--yellow)','주의':'var(--orange)','위험':'var(--red)'};
+    out.innerHTML = '<div class="ax-predict-row">' +
+      pred.predictions.map(function(p){
+        return '<div class="ax-predict-card">' +
+          '<div class="ax-predict-time">' + p.hour + '</div>' +
+          '<div class="ax-predict-score" style="color:' + (lc[p.level]||'#fff') + '">' + p.emi + '</div>' +
+          '<div class="ax-predict-label" style="color:' + (lc[p.level]||'#fff') + '">' + p.level + '</div>' +
+          '<div style="font-size:9px;color:var(--text3);margin-top:4px;line-height:1.4;">' + p.reason + '</div>' +
+          '</div>';
+      }).join('') +
+      '</div>' +
+      '<div style="margin-top:10px;padding:10px 12px;background:rgba(0,0,0,.2);border-radius:8px;border-left:3px solid var(--accent);">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px;">📈 트렌드: ' + pred.trend + ' | ' + pred.peak + '</div>' +
+      '<div style="font-size:11px;color:var(--text2);">🔧 ' + pred.action + '</div>' +
+      '</div>';
+  } catch(e) {
+    out.innerHTML = '<div class="ax-placeholder"><div class="ax-placeholder-txt" style="color:var(--red)">⚠ ' +
+      (e.message !== 'API_KEY_REQUIRED' ? e.message : '') + '</div></div>';
+  }
+  btn.disabled = false; btn.textContent = '📈 EMI 예측';
+}
+
+// ── 탭4: AI 질의응답 ──
+async function sendChat() {
+  var input   = document.getElementById('chatInput');
+  var sendBtn = document.getElementById('chatSend');
+  var msg = input.value.trim();
+  if (!msg || sendBtn.disabled) return;
+  if (!weatherData) { appendChat('ai','⚠ 기상 데이터를 먼저 수집하세요'); return; }
+  input.value = ''; sendBtn.disabled = true;
+  appendChat('user', msg);
+
+  if (chatMessages.length === 0) {
+    chatMessages.push({ role:'user',
+      content: '[기상 컨텍스트]\n' + buildWeatherContext() + '\n\n질문: ' + msg });
+  } else {
+    chatMessages.push({ role:'user', content: msg });
+  }
+  var thinking = appendChat('ai', '분석 중...', true);
+
+  try {
+    var reply = await callClaude(chatMessages, 700);
+    chatMessages.push({ role:'assistant', content: reply });
+    thinking.classList.remove('thinking');
+    thinking.textContent = reply;
+    document.getElementById('chatHistory').scrollTop = 99999;
+  } catch(e) {
+    thinking.classList.remove('thinking');
+    if (e.message !== 'API_KEY_REQUIRED') {
+      thinking.textContent = '⚠ ' + e.message;
+      chatMessages.pop();
+    } else { thinking.remove(); chatMessages.pop(); }
+  }
+  sendBtn.disabled = false; input.focus();
+}
+
+function quickAsk(q) {
+  document.getElementById('chatInput').value = q;
+  document.querySelectorAll('.ax-tab')[3].click();
+  sendChat();
+}
+
+function appendChat(role, text, isThinking) {
+  var hist = document.getElementById('chatHistory');
+  var div  = document.createElement('div');
+  div.className = 'ax-msg ' + role + (isThinking ? ' thinking' : '');
+  div.textContent = text;
+  hist.appendChild(div);
+  hist.scrollTop = 99999;
+  return div;
+}
+
+// ── API 키 모달 ──
+function showApiKeyModal() {
+  if (document.getElementById('apiKeyModal')) return;
+  var m = document.createElement('div');
+  m.id = 'apiKeyModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  m.innerHTML = '<div style="background:#0e2040;border:1px solid var(--accent);border-radius:14px;padding:28px;max-width:460px;width:100%;">' +
+    '<div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px;">🔑 Claude API 키 설정</div>' +
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.8;">' +
+    'AI 분석에 <strong style="color:var(--accent);">Anthropic API 키</strong>가 필요합니다.<br>' +
+    '키는 이 브라우저에만 저장되며 외부로 전송되지 않습니다.<br>' +
+    '<a href="https://console.anthropic.com/" target="_blank" style="color:var(--accent);">console.anthropic.com</a>에서 무료 발급' +
+    '</div>' +
+    '<input id="apiKeyInput" type="password"' +
+    ' style="width:100%;background:rgba(0,0,0,.3);border:1px solid var(--border2);color:#fff;' +
+    'padding:10px 14px;border-radius:8px;font-size:13px;font-family:var(--mono);margin-bottom:12px;outline:none;"' +
+    ' placeholder="sk-ant-api03-..." />' +
+    '<div style="display:flex;gap:8px;">' +
+    '<button onclick="saveApiKey()" style="flex:1;background:var(--accent);border:none;color:#000;padding:10px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">✓ 저장 후 분석</button>' +
+    '<button onclick="document.getElementById(\'apiKeyModal\').remove()" style="background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;">취소</button>' +
+    '</div></div>';
+  document.body.appendChild(m);
+  document.getElementById('apiKeyInput').focus();
+}
+
+function saveApiKey() {
+  var key = document.getElementById('apiKeyInput').value.trim();
+  if (!key.startsWith('sk-ant')) { alert('올바른 키 형식이 아닙니다 (sk-ant- 로 시작)'); return; }
+  localStorage.setItem('emi_claude_key', key);
+  document.getElementById('apiKeyModal').remove();
+  var st = document.getElementById('axModel');
+  if (st) st.textContent = '✅ API 키 저장됨 · ' + CLAUDE_MODEL;
+  runAIAnalysis();
+}
+
+// 저장된 키 자동 로드
+(function(){
+  var k = localStorage.getItem('emi_claude_key');
+  var st = document.getElementById('axModel');
+  if (k && st) st.textContent = '✅ API 키 설정됨 · ' + CLAUDE_MODEL;
+  else if (st) st.textContent = '⚪ API 키 미설정 · ' + CLAUDE_MODEL + ' · 분석 버튼 클릭 시 입력';
+})();
+
+
+window.addEventListener('load', () => {
+  const saved = sessionStorage.getItem('claude_api_key');
+  if (saved) { window._claudeApiKey = saved; }
+});
+
+// ── 타이핑 효과 ──
+async function typewriterEffect(el, text, delay = 10) {
+  el.textContent = '';
+  for (let i = 0; i < text.length; i++) {
+    el.textContent += text[i];
+    if (i % 3 === 0) await new Promise(r => setTimeout(r, delay));
+  }
+}
+
+// ── AX 탭 전환 ──
+function switchAxTab(btn, id) {
+  document.querySelectorAll('.ax-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.ax-tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+
+// 기상 데이터 수집 완료 후 자동 컨텍스트 업데이트
+const _origUpdateAll = updateWeatherUI;
 
 window.addEventListener('load', () => {
   fetchAllData();                        // 실시간 API만
