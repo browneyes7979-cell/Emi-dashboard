@@ -556,6 +556,7 @@ optgroup option{color:var(--text);}
     <div class="live"><div class="live-dot"></div>LIVE</div>
     <div id="clock">--:--:--</div>
     <button class="rbtn" onclick="fetchAllData()">↻ 새로고침</button>
+    <button class="rbtn" onclick="openKeyManager()" style="border-color:var(--green);color:var(--green);" title="Groq API 키 관리">🔑 AI 키</button>
   </div>
 </header>
 
@@ -645,6 +646,25 @@ optgroup option{color:var(--text);}
     <div class="sh-note">클릭 → 기상 영향 케이스 상세 분석</div>
   </div>
   <div class="fac-grid" id="facilityGrid"></div>
+
+  <!-- 하단 -->
+  <div class="bot-grid">
+    <div class="apanel">
+      <div class="sh"><div class="sh-title">⚠ 실시간 알림</div><div class="sh-line"></div><div class="sh-note" id="alertCount">0건</div></div>
+      <div class="alert-list" id="alertList"><div class="no-data">데이터 수집 중...</div></div>
+    </div>
+    <div class="apanel">
+      <div class="sh"><div class="sh-title">📋 대응 가이드</div><div class="sh-line"></div></div>
+      <div class="guide-tabs">
+        <button class="gtab active" onclick="switchGuide(this,'immediate')">즉시 조치</button>
+        <button class="gtab" onclick="switchGuide(this,'maintenance')">정비 권고</button>
+        <button class="gtab" onclick="switchGuide(this,'monitoring')">모니터링</button>
+      </div>
+      <div id="guide-immediate" class="gcontent active"></div>
+      <div id="guide-maintenance" class="gcontent"></div>
+      <div id="guide-monitoring" class="gcontent"></div>
+    </div>
+  </div>
 
   <!-- ══ AX AI 분석 패널 ══ -->
   <div class="ax-section">
@@ -745,30 +765,12 @@ optgroup option{color:var(--text);}
       </div>
 
       <div class="ax-footer">
-        <span id="axModel">⚪ API 키 미설정 · claude-sonnet-4-20250514 · 분석 버튼 클릭 시 입력</span>
+        <span id="axModel">Groq · LLaMA-3.3-70B · 완전무료</span>
         <span id="axTokens">대기 중</span>
       </div>
     </div>
   </div>
 
-  <!-- 하단 -->
-  <div class="bot-grid">
-    <div class="apanel">
-      <div class="sh"><div class="sh-title">⚠ 실시간 알림</div><div class="sh-line"></div><div class="sh-note" id="alertCount">0건</div></div>
-      <div class="alert-list" id="alertList"><div class="no-data">데이터 수집 중...</div></div>
-    </div>
-    <div class="apanel">
-      <div class="sh"><div class="sh-title">📋 대응 가이드</div><div class="sh-line"></div></div>
-      <div class="guide-tabs">
-        <button class="gtab active" onclick="switchGuide(this,'immediate')">즉시 조치</button>
-        <button class="gtab" onclick="switchGuide(this,'maintenance')">정비 권고</button>
-        <button class="gtab" onclick="switchGuide(this,'monitoring')">모니터링</button>
-      </div>
-      <div id="guide-immediate" class="gcontent active"></div>
-      <div id="guide-maintenance" class="gcontent"></div>
-      <div id="guide-monitoring" class="gcontent"></div>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -1708,7 +1710,20 @@ async function fetchAllData() {
     console.warn('[EMI] API 실패:', e.message);
     isRealtime = false;
     if (ldDet) ldDet.textContent = '⚠ ' + e.message;
-    showApiError(e.message);
+    // API 실패: 연결 안내 표시
+    var statusEl2 = document.getElementById('apiStatus');
+    if (statusEl2) { statusEl2.className = 'api-st err'; statusEl2.textContent = '⚠ API 연결 실패 — 새로고침 또는 네트워크 확인'; }
+    var lu = document.getElementById('lastUpdate');
+    if (lu) lu.textContent = '⚠ 미연결 | ' + new Date().toLocaleTimeString('ko-KR',{hour12:false});
+    // 기존 데이터 없으면 "--" 표시
+    if (!lastWeatherData) {
+      var sc = document.getElementById('emiScore');
+      if (sc) { sc.textContent = '--'; sc.style.color = 'var(--text3)'; }
+      var lt = document.getElementById('emiLevelText');
+      if (lt) lt.textContent = 'API 연결 필요';
+      var al = document.getElementById('alertList');
+      if (al) al.innerHTML = '<div class="no-data" style="color:var(--red);">⚠ 실시간 데이터 없음<br><small>인터넷 연결 후 새로고침 하세요</small></div>';
+    }
   }
 
   document.getElementById('loadingOverlay').style.display = 'none';
@@ -1720,71 +1735,6 @@ async function fetchAllData() {
 // ════════════════════════════════════════
 
 
-
-// API 연결 실패 상태 표시 (가짜 데이터 없음)
-function showApiError(msg) {
-  const statusEl = document.getElementById('apiStatus');
-  statusEl.className = 'api-status err';
-  statusEl.textContent = '⚠ API 연결 실패 — 새로고침 또는 네트워크 확인';
-
-  const t = new Date().toLocaleTimeString('ko-KR', { hour12: false });
-  document.getElementById('lastUpdate').textContent = '⚠ 미연결 | ' + t;
-  document.getElementById('loadingOverlay').style.display = 'none';
-
-  // 이미 실시간 데이터가 있으면 그것 유지, 없으면 연결 안내만 표시
-  if (!lastWeatherData) {
-    showConnectingState();
-  } else {
-    // 기존 실시간 캐시 유지하되 상단에 경고 배너
-    const banner = document.getElementById('apiErrorBanner');
-    if (banner) {
-      banner.style.display = 'flex';
-      banner.querySelector('#bannerMsg').textContent =
-        '⚠  API 연결 끊김 (' + t + ') — 마지막 수집 데이터 표시 중. 새로고침하세요.';
-    }
-  }
-  console.warn('[EMI] API 오류:', msg);
-}
-
-// 최초 진입 시 실시간 데이터 없는 경우 — 연결 대기 UI
-function showConnectingState() {
-  // EMI 스코어 -- 표시
-  document.getElementById('emiScore').textContent = '--';
-  document.getElementById('emiScore').style.color = 'var(--text3)';
-  document.getElementById('emiLevelText').textContent = 'API 연결 필요';
-  document.getElementById('emiLevelIcon').textContent = '⭕';
-  document.getElementById('emiGaugeFill').style.width = '0%';
-
-  // 기상값 전부 -- 처리
-  ['temp','hum','wind','rain','press'].forEach(id => {
-    const el = document.getElementById('m-' + id);
-    const sl = document.getElementById('ms-' + id);
-    if (el) { el.textContent = '--'; el.style.color = 'var(--text3)'; }
-    if (sl) { sl.textContent = '연결 대기'; sl.style.background = 'rgba(255,80,80,.1)'; sl.style.color = 'var(--red)'; }
-  });
-  document.getElementById('m-wdir').textContent = '--';
-  document.getElementById('m-wdeg').textContent = '--°';
-
-  // 방지시설 -- 처리
-  const grid = document.getElementById('facilityGrid');
-  grid.innerHTML = ['백필터','습식세정탑','전기집진기','RTO 축열연소'].map(name => `
-    <div class="fac-card" style="cursor:default;opacity:.5;">
-      <div class="fac-card-bar" style="background:var(--text3)"></div>
-      <div class="fac-name">🔌 ${name}</div>
-      <div class="fac-sr">
-        <div class="fac-score" style="color:var(--text3)">--</div>
-        <div class="fac-risk" style="background:rgba(100,100,100,.2);color:var(--text3)">대기중</div>
-      </div>
-      <div class="fac-issues"><div class="fac-issue">기상 API 연결 후 표시됩니다</div></div>
-    </div>
-  `).join('');
-
-  // 알림 -- 처리
-  document.getElementById('alertList').innerHTML =
-    '<div class="no-data" style="color:var(--red)">⚠ 실시간 데이터 없음<br><small>새로고침 버튼을 누르거나 인터넷 연결을 확인하세요</small></div>';
-
-  document.getElementById('loadingOverlay').style.display = 'none';
-}
 
 const REGION_NOTES = {
   '여수석화산단': { icon:'🌊', title:'여수 석유화학산단', body:'해안 인접 · 남서풍 시 여천·돌산 이동 주의 · 여름 고온다습(RH 80%+) · 태풍 영향권 (6~9월)' },
@@ -1823,26 +1773,18 @@ function switchGuide(btn, id) {
 // AX · Claude AI 분석 엔진 (기술 검증 가이드 전용)
 // ════════════════════════════════════════
 
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const CLAUDE_API   = 'https://api.anthropic.com/v1/messages';
+// ── Groq API 설정 (완전 무료, 신용카드 불필요) ──
+const GROQ_API   = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';  // 무료 최고성능 모델
+
+// ★ Groq API 키 (무료 - 여기에 직접 입력)
+const GROQ_KEY = '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';  // ← gsk_... 키를 여기에 붙여넣기
 
 function getApiKey() {
-  return localStorage.getItem('emi_claude_key') || '';
+  // 우선순위: 하드코딩 키 → localStorage 개인키 → 없음
+  if (GROQ_KEY) return GROQ_KEY;
+  return localStorage.getItem('emi_groq_key') || '';
 }
-
-// fetch 오버라이드 - Claude API 호출 시 키 자동 주입
-const _origFetch = window.fetch.bind(window);
-window.fetch = function(url, opts) {
-  opts = opts || {};
-  if (typeof url === 'string' && url.includes('anthropic.com')) {
-    const key = getApiKey();
-    opts = Object.assign({}, opts);
-    opts.headers = Object.assign({}, opts.headers || {});
-    if (key) opts.headers['x-api-key'] = key;
-    opts.headers['anthropic-dangerous-direct-browser-access'] = 'true';
-  }
-  return _origFetch(url, opts);
-};
 
 let chatMessages = [];
 
@@ -1884,25 +1826,50 @@ const SYSTEM_PROMPT = '당신은 여수 석유화학산단 대기오염 방지�
   '전문 기준: 대기환경보전법·방지시설운영기술기준(국립환경과학원)·KOSHA GUIDE·KS 표준·TMS운영지침\n' +
   '답변: 간결·실무적·수치 명시·한국어';
 
-// 공통 Claude API 호출
+// ── 공통 AI 호출 (Groq - 무료) ──
 async function callClaude(messages, maxTokens) {
   maxTokens = maxTokens || 1000;
-  if (!getApiKey()) { showApiKeyModal(); throw new Error('API_KEY_REQUIRED'); }
-  const res = await fetch(CLAUDE_API, {
+  if (!getApiKey()) {
+    // 키가 없으면 모달 대신 탭에 안내 표시
+    var activeOut = document.getElementById('analyzeOutput') ||
+                    document.getElementById('riskOutput');
+    if (activeOut) {
+      activeOut.className = 'ax-output';
+      activeOut.textContent = '⚙️ API 키 미설정\n\n관리자에게 문의하거나\n우측 상단 🔑 버튼을 클릭하여 키를 입력하세요.';
+    }
+    throw new Error('API_KEY_REQUIRED');
+  }
+
+  // system 메시지를 OpenAI 형식으로 변환
+  var fullMessages = [{ role: 'system', content: SYSTEM_PROMPT }].concat(messages);
+
+  const res = await fetch(GROQ_API, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: maxTokens,
-      system: SYSTEM_PROMPT, messages: messages })
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + getApiKey()
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      max_tokens: maxTokens,
+      messages: fullMessages,
+      temperature: 0.3   // 낮은 온도 = 일관성 있는 기술 답변
+    })
   });
+
   if (!res.ok) {
     const e = await res.json().catch(function(){ return {}; });
-    throw new Error(e.error ? e.error.message : 'HTTP ' + res.status);
+    const msg = e.error ? e.error.message : 'HTTP ' + res.status;
+    throw new Error(msg);
   }
+
   const data = await res.json();
   const tokEl = document.getElementById('axTokens');
-  if (tokEl) tokEl.textContent = '입력 ' + (data.usage ? data.usage.input_tokens : 0) +
-    ' + 출력 ' + (data.usage ? data.usage.output_tokens : 0) + ' 토큰';
-  return (data.content && data.content[0]) ? data.content[0].text : '';
+  if (tokEl && data.usage) {
+    tokEl.textContent = '무료 · 입력 ' + data.usage.prompt_tokens +
+      ' + 출력 ' + data.usage.completion_tokens + ' 토큰';
+  }
+  return data.choices && data.choices[0] ? data.choices[0].message.content : '';
 }
 
 // 탭 전환
@@ -2079,73 +2046,65 @@ function appendChat(role, text, isThinking) {
 }
 
 // ── API 키 모달 ──
+// 키 관리 (헤더 🔑 버튼)
+function openKeyManager() { showApiKeyModal(); }
+
 function showApiKeyModal() {
   if (document.getElementById('apiKeyModal')) return;
+  var builtIn = (GROQ_KEY && GROQ_KEY.length > 10);
+  var saved   = localStorage.getItem('emi_groq_key');
   var m = document.createElement('div');
   m.id = 'apiKeyModal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-  m.innerHTML = '<div style="background:#0e2040;border:1px solid var(--accent);border-radius:14px;padding:28px;max-width:460px;width:100%;">' +
-    '<div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:6px;">🔑 Claude API 키 설정</div>' +
-    '<div style="font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.8;">' +
-    'AI 분석에 <strong style="color:var(--accent);">Anthropic API 키</strong>가 필요합니다.<br>' +
-    '키는 이 브라우저에만 저장되며 외부로 전송되지 않습니다.<br>' +
-    '<a href="https://console.anthropic.com/" target="_blank" style="color:var(--accent);">console.anthropic.com</a>에서 무료 발급' +
+  m.innerHTML =
+    '<div style="background:#0e2040;border:1px solid var(--accent);border-radius:14px;padding:28px;max-width:480px;width:100%;">' +
+    '<div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:10px;">🔑 Groq AI 키 관리</div>' +
+    '<div style="background:rgba(0,0,0,.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:11px;">' +
+    (builtIn ? '<div style="color:var(--green);">✅ 공용 내장 키 사용 중 — 추가 입력 불필요</div>' : '<div style="color:var(--red);">⚠ 내장 키 없음</div>') +
+    (saved   ? '<div style="color:var(--accent);margin-top:3px;">✅ 개인 키 저장됨</div>' : '') +
     '</div>' +
-    '<input id="apiKeyInput" type="password"' +
-    ' style="width:100%;background:rgba(0,0,0,.3);border:1px solid var(--border2);color:#fff;' +
-    'padding:10px 14px;border-radius:8px;font-size:13px;font-family:var(--mono);margin-bottom:12px;outline:none;"' +
-    ' placeholder="sk-ant-api03-..." />' +
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.8;">' +
+    '개인 키 입력 시 공용 키보다 우선 적용 · ' +
+    '<a href="https://console.groq.com/" target="_blank" style="color:var(--accent);">console.groq.com</a> 무료 발급' +
+    '</div>' +
+    '<input id="apiKeyInput" type="password" style="width:100%;background:rgba(0,0,0,.3);border:1px solid var(--border2);color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;font-family:var(--mono);margin-bottom:10px;outline:none;" placeholder="gsk_..." />' +
     '<div style="display:flex;gap:8px;">' +
-    '<button onclick="saveApiKey()" style="flex:1;background:var(--accent);border:none;color:#000;padding:10px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">✓ 저장 후 분석</button>' +
-    '<button onclick="document.getElementById(\'apiKeyModal\').remove()" style="background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;">취소</button>' +
+    '<button onclick="saveApiKey()" style="flex:1;background:var(--accent);border:none;color:#000;padding:10px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">✓ 저장</button>' +
+    (saved ? '<button onclick="clearApiKey()" style="background:rgba(255,80,80,.2);border:1px solid var(--red);color:var(--red);padding:10px 14px;border-radius:8px;cursor:pointer;font-size:12px;">개인키 삭제</button>' : '') +
+    '<button onclick="document.getElementById('apiKeyModal').remove()" style="background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;">닫기</button>' +
     '</div></div>';
   document.body.appendChild(m);
-  document.getElementById('apiKeyInput').focus();
+  setTimeout(function(){ var i=document.getElementById('apiKeyInput'); if(i) i.focus(); }, 100);
 }
 
 function saveApiKey() {
   var key = document.getElementById('apiKeyInput').value.trim();
-  if (!key.startsWith('sk-ant')) { alert('올바른 키 형식이 아닙니다 (sk-ant- 로 시작)'); return; }
-  localStorage.setItem('emi_claude_key', key);
-  document.getElementById('apiKeyModal').remove();
-  var st = document.getElementById('axModel');
-  if (st) st.textContent = '✅ API 키 저장됨 · ' + CLAUDE_MODEL;
-  runAIAnalysis();
+  if (!key) { var _m=document.getElementById('apiKeyModal'); if(_m)_m.remove(); return; }
+  if (!key.startsWith('gsk_')) { alert('Groq 키 형식 오류 (gsk_ 로 시작해야 합니다)'); return; }
+  localStorage.setItem('emi_groq_key', key);
+  var _m2=document.getElementById('apiKeyModal'); if(_m2)_m2.remove();
+  updateKeyStatus(); runAIAnalysis();
 }
 
-// 저장된 키 자동 로드
-(function(){
-  var k = localStorage.getItem('emi_claude_key');
-  var st = document.getElementById('axModel');
-  if (k && st) st.textContent = '✅ API 키 설정됨 · ' + CLAUDE_MODEL;
-  else if (st) st.textContent = '⚪ API 키 미설정 · ' + CLAUDE_MODEL + ' · 분석 버튼 클릭 시 입력';
-})();
-
-
-window.addEventListener('load', () => {
-  const saved = sessionStorage.getItem('claude_api_key');
-  if (saved) { window._claudeApiKey = saved; }
-});
-
-// ── 타이핑 효과 ──
-async function typewriterEffect(el, text, delay = 10) {
-  el.textContent = '';
-  for (let i = 0; i < text.length; i++) {
-    el.textContent += text[i];
-    if (i % 3 === 0) await new Promise(r => setTimeout(r, delay));
-  }
+function clearApiKey() {
+  localStorage.removeItem('emi_groq_key');
+  var _m3=document.getElementById('apiKeyModal'); if(_m3)_m3.remove();
+  updateKeyStatus();
 }
 
-// ── AX 탭 전환 ──
-function switchAxTab(btn, id) {
-  document.querySelectorAll('.ax-tab').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.ax-tab-content').forEach(c => c.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById(id).classList.add('active');
+function updateKeyStatus() {
+  var st = document.getElementById('axModel'); if (!st) return;
+  var builtIn = (GROQ_KEY && GROQ_KEY.length > 10);
+  var saved   = localStorage.getItem('emi_groq_key');
+  if (saved)         st.textContent = '✅ 개인 Groq 키 · ' + GROQ_MODEL + ' · 무료';
+  else if (builtIn)  st.textContent = '✅ 공용 Groq 키 내장 · ' + GROQ_MODEL + ' · 무료';
+  else               st.textContent = '⚪ Groq 키 미설정 · 🔑 버튼으로 입력';
 }
 
-// 기상 데이터 수집 완료 후 자동 컨텍스트 업데이트
-const _origUpdateAll = updateWeatherUI;
+
+// 페이지 로드 시 키 상태 표시
+setTimeout(updateKeyStatus, 300);
+
 
 window.addEventListener('load', () => {
   fetchAllData();                        // 실시간 API만
