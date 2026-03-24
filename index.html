@@ -1075,14 +1075,13 @@ function degToDir(deg) {
 // Open-Meteo 실시간 API (CORS 허용)
 // ════════════════════════════════════════
 // 타임아웃 fetch 헬퍼 (AbortController 미지원 브라우저 대비)
-function fetchWithTimeout(url, ms = 8000) {
+function fetchWithTimeout(url, ms = 5000) {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), ms);
     return fetch(url, { signal: ctrl.signal })
       .finally(() => clearTimeout(timer));
   } catch(e) {
-    // AbortController 미지원 → 일반 fetch
     return fetch(url);
   }
 }
@@ -1666,9 +1665,12 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
 // MAIN DATA FETCH — Open-Meteo 실시간
 // ════════════════════════════════════════
 async function fetchAllData() {
+  // 혹시 오버레이가 남아있으면 즉시 제거
+  var ov = document.getElementById('loadingOverlay');
+  if (ov) ov.style.display = 'none';
+
   const statusEl = document.getElementById('apiStatus');
-  statusEl.className = 'api-status loading';
-  statusEl.textContent = currentRegion + ' 날씨 수집 중...';
+  if (statusEl) { statusEl.className = 'api-st loading'; statusEl.textContent = currentRegion + ' 날씨 수집 중...'; }
 
   const ldTxt = document.getElementById('loadTxt');
   const ldDet = document.getElementById('loadDetail');
@@ -1698,7 +1700,7 @@ async function fetchAllData() {
     updateGuideUI(w, emi);
     updateForecastUI(parsed.forecast, w);
 
-    statusEl.className = 'api-status ok';
+    statusEl.className = 'api-st ok';
     const src = parsed._source || 'API';
     statusEl.textContent = '🛰 ' + currentRegion + ' · ' + src + ' 실시간 (' + coord.lat + '°N)';
     // 에러 배너 숨기기
@@ -2071,10 +2073,15 @@ function showApiKeyModal() {
     '<div style="display:flex;gap:8px;">' +
     '<button onclick="saveApiKey()" style="flex:1;background:var(--accent);border:none;color:#000;padding:10px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">✓ 저장</button>' +
     (saved ? '<button onclick="clearApiKey()" style="background:rgba(255,80,80,.2);border:1px solid var(--red);color:var(--red);padding:10px 14px;border-radius:8px;cursor:pointer;font-size:12px;">개인키 삭제</button>' : '') +
-    '<button onclick="document.getElementById('apiKeyModal').remove()" style="background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;">닫기</button>' +
+    '<button onclick="closeApiModal()" style="background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;">닫기</button>' +
     '</div></div>';
   document.body.appendChild(m);
   setTimeout(function(){ var i=document.getElementById('apiKeyInput'); if(i) i.focus(); }, 100);
+}
+
+function closeApiModal() {
+  var m = document.getElementById('apiKeyModal');
+  if (m) m.remove();
 }
 
 function saveApiKey() {
@@ -2107,8 +2114,14 @@ setTimeout(updateKeyStatus, 300);
 
 
 window.addEventListener('load', () => {
-  fetchAllData();                        // 실시간 API만
-  setInterval(fetchAllData, 5 * 60 * 1000); // 5분 자동 갱신
+  // ① 로딩 화면 즉시 제거 (API 결과 기다리지 않음)
+  document.getElementById('loadingOverlay').style.display = 'none';
+
+  // ② 기상 데이터는 백그라운드에서 수집
+  fetchAllData();
+
+  // ③ 5분마다 자동 갱신
+  setInterval(fetchAllData, 5 * 60 * 1000);
 });
 </script>
 </body>
