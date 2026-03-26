@@ -3,2126 +3,1076 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EMI 대시보드 · 여수석유화학산단</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<title>여수 국가산단 사고 예측</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+/*
+  데이터 흐름:
+  GitHub Actions(서버) → 기상청/에어코리아 API 호출
+                       → data/*.json 저장 (30분마다)
+                       → GitHub Pages로 제공
+  이 HTML → ./data/*.json 읽기 (같은 출처 → CORS 없음)
+           → 실패 시 Open-Meteo 직접 호출 (CORS 지원)
+*/
 :root{
-  --bg:#060c18;--bg2:#0a1628;--bg3:#0e1e38;
-  --panel:#102040;--panel2:#1a2e50;
-  --border:#2a4a7a;--border2:#3a6aaa;
-  --accent:#00e5ff;--accent2:#00aadd;
-  --green:#00ffb0;--yellow:#ffe040;--orange:#ffaa00;--red:#ff5555;
-  --text:#ffffff;--text2:#cce0ff;--text3:#88b8ee;
-  --mono:'JetBrains Mono',monospace;--sans:'Noto Sans KR',sans-serif;
+  --bg:#05080f; --sur:#0a1020; --sur2:#0e1830; --bdr:#1a2a48;
+  --ac:#00cfff;
+  --lv-safe:#00e676;    --lv-safe-bg:rgba(0,230,118,.08);
+  --lv-caution:#38bdf8; --lv-caution-bg:rgba(56,189,248,.08);
+  --lv-watch:#ffaa00;   --lv-watch-bg:rgba(255,170,0,.10);
+  --lv-alert:#ff3535;   --lv-alert-bg:rgba(255,53,53,.12);
+  --tx:#bdd0ee; --txd:#4a6080; --txb:#e4eeff;
+  --mono:'Share Tech Mono',monospace;
+  --sans:'Noto Sans KR',sans-serif;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
-body::before{content:'';position:fixed;inset:0;
-  background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px);
-  background-size:40px 40px;pointer-events:none;z-index:0;}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:9999;}
 
 /* ── HEADER ── */
-.hdr{position:sticky;top:0;z-index:200;background:rgba(7,11,20,0.95);backdrop-filter:blur(14px);
-  border-bottom:1px solid var(--border);padding:0 24px;
-  display:flex;align-items:center;justify-content:space-between;height:60px;}
-.hdr-l{display:flex;align-items:center;gap:14px;}
-.logo{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;
-  font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:2px;padding:4px 12px;border-radius:4px;}
-.hdr-title{font-size:14px;font-weight:700;letter-spacing:.5px;color:#ffffff;}
-.hdr-sub{font-size:10px;color:#99ccff;margin-top:1px;}
-.hdr-r{display:flex;align-items:center;gap:16px;}
-.live{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--green);}
-.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite;}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(1.3);}}
-#clock{font-family:var(--mono);font-size:13px;color:#cce8ff;}
-.rbtn{background:var(--panel2);border:1px solid var(--border2);color:var(--accent);
-  padding:6px 13px;border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--sans);
-  font-weight:500;transition:all .2s;display:flex;align-items:center;gap:5px;}
-.rbtn:hover{background:var(--border2);}
+header{background:linear-gradient(90deg,#030710,#081020,#030710);border-bottom:1px solid var(--bdr);height:52px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:300;}
+.hlogo{display:flex;align-items:center;gap:10px;}
+.hicon{width:28px;height:28px;border:1.5px solid var(--ac);display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:4px;box-shadow:0 0 10px rgba(0,207,255,.2);}
+.hicon b{background:var(--ac);display:block;animation:bc 3s infinite;}
+.hicon b:nth-child(2){animation-delay:.5s;} .hicon b:nth-child(3){animation-delay:1s;} .hicon b:nth-child(4){animation-delay:1.5s;}
+@keyframes bc{0%,75%,100%{opacity:1;}87%{opacity:.15;}}
+.htitle{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--txb);}
+.htitle em{color:var(--ac);font-style:normal;}
+.hmeta{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:10px;}
+.live{display:flex;align-items:center;gap:5px;color:var(--lv-safe);}
+.ldot{width:6px;height:6px;border-radius:50%;background:var(--lv-safe);box-shadow:0 0 6px var(--lv-safe);animation:pd 1.4s infinite;}
+@keyframes pd{0%,100%{transform:scale(1);}50%{transform:scale(1.6);opacity:.5;}}
+#clock{color:var(--ac);}
 
-/* ── MAIN ── */
-.main{position:relative;z-index:1;padding:18px 22px;max-width:1700px;margin:0 auto;}
-.loc-bar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
-.loc-label{font-size:11px;color:#aaccff;font-weight:600;}
-.loc-sel{background:var(--panel);border:1px solid var(--border2);color:var(--text);
-  padding:6px 12px;border-radius:6px;font-size:13px;font-family:var(--sans);cursor:pointer;outline:none;}
-.api-st{margin-left:auto;font-size:10px;font-family:var(--mono);padding:3px 9px;border-radius:4px;border:1px solid;}
-.api-st.ok{color:var(--green);border-color:var(--green);background:rgba(0,229,160,.07);}
-.api-st.err{color:var(--red);border-color:var(--red);background:rgba(255,61,61,.07);}
-.api-st.loading{color:var(--yellow);border-color:var(--yellow);background:rgba(255,200,0,.07);}
-#lastUpdate{font-size:10px;color:#88ccff;font-family:var(--mono);}
+/* ── DATA SOURCE 표시줄 ── */
+.datasrc-bar{background:var(--sur2);border-bottom:1px solid var(--bdr);padding:4px 16px;font-family:var(--mono);font-size:9px;color:var(--txd);display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.ds-item{display:flex;align-items:center;gap:4px;}
+.ds-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.ds-dot.ok{background:var(--lv-safe);} .ds-dot.fallback{background:var(--lv-watch);} .ds-dot.fail{background:var(--lv-alert);} .ds-dot.load{background:var(--ac);animation:pd .6s infinite;}
 
-/* ── EMI TOP ROW ── */
-.emi-row{display:grid;grid-template-columns:300px 1fr;gap:14px;margin-bottom:16px;}
-.emi-card{background:#102040;border:1px solid #3a6aaa;border-radius:12px;padding:22px;position:relative;overflow:hidden;}
-.emi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),transparent);}
-.emi-lbl{font-size:10px;font-weight:700;letter-spacing:3px;color:#aaddff;margin-bottom:6px;font-family:var(--mono);}
-.emi-val{font-family:'Bebas Neue',cursive;font-size:88px;line-height:1;letter-spacing:4px;transition:color .5s;}
-.emi-unit{font-size:16px;font-family:var(--mono);color:#cce8ff;margin-top:2px;font-weight:600;}
-.emi-badge{display:inline-flex;align-items:center;gap:7px;padding:5px 13px;border-radius:20px;
-  font-size:12px;font-weight:700;margin-top:10px;border:1px solid;}
-.emi-gauge{margin-top:16px;height:7px;background:var(--bg3);border-radius:4px;overflow:hidden;}
-.emi-gfill{height:100%;border-radius:4px;transition:width 1s ease,background .5s;}
-.factors{margin-top:14px;display:flex;flex-direction:column;gap:7px;}
-.frow{display:flex;align-items:center;gap:7px;font-size:11px;}
-.fname{color:#aaccee;width:76px;flex-shrink:0;font-weight:500;}
-.fbar-w{flex:1;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;}
-.fbar{height:100%;border-radius:2px;transition:width 1s ease;}
-.fval{font-family:var(--mono);font-size:10px;color:#ccddff;width:28px;text-align:right;font-weight:600;}
-.fcst-row{display:flex;gap:7px;margin-top:12px;}
-.fcst-item{flex:1;background:#0e2040;border:1px solid #2a4a7a;border-radius:7px;padding:7px;text-align:center;}
-.fcst-time{font-family:var(--mono);font-size:9px;color:#aaccff;margin-bottom:3px;font-weight:600;}
-.fcst-ico{font-size:16px;margin-bottom:3px;}
-.fcst-emi{font-family:'Bebas Neue',cursive;font-size:18px;}
+/* ── TICKER ── */
+.ticker{background:var(--sur);border-bottom:1px solid var(--bdr);height:24px;display:flex;align-items:center;overflow:hidden;}
+.tlbl{background:var(--ac);color:#000;font-family:var(--mono);font-size:9px;font-weight:900;letter-spacing:2px;padding:0 8px;height:100%;display:flex;align-items:center;flex-shrink:0;}
+.ttrack{flex:1;overflow:hidden;}
+.tinner{display:flex;gap:36px;animation:scroll 70s linear infinite;white-space:nowrap;font-family:var(--mono);font-size:10px;color:var(--txd);}
+.tinner .v{color:var(--txb);}.tinner .r{color:var(--lv-alert);}.tinner .w{color:var(--lv-watch);}.tinner .g{color:var(--lv-safe);}.tinner .c{color:var(--lv-caution);}
+@keyframes scroll{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
 
-/* ── WEATHER METRICS ── */
-.wx-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;}
-.mc{background:#122540;border:1px solid #3a6aaa;border-radius:10px;padding:14px;
-  display:flex;flex-direction:column;gap:4px;transition:border-color .3s;}
-.mc.alert-card{border-color:var(--orange);}
-.mc.danger-card{border-color:var(--red);animation:cblink 2s infinite;}
-@keyframes cblink{0%,100%{border-color:var(--red);}50%{border-color:rgba(255,61,61,.3);}}
-.mc-ico{font-size:18px;}
-.mc-name{font-size:9px;font-weight:700;letter-spacing:2px;color:#aaccff;}
-.mc-val{font-family:var(--mono);font-size:28px;font-weight:700;line-height:1;transition:color .5s;color:#ffffff;}
-.mc-unit{font-size:10px;color:#99bbee;font-weight:600;}
-.mc-st{font-size:9px;padding:2px 7px;border-radius:10px;width:fit-content;font-weight:600;}
-.trend{display:flex;gap:2px;margin-top:4px;align-items:flex-end;height:20px;}
-.tbar{width:5px;border-radius:2px 2px 0 0;background:var(--border2);transition:height .5s;}
+/* ── SPINNER ── */
+.spin{display:inline-block;width:11px;height:11px;border:2px solid var(--bdr);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite;vertical-align:middle;}
+@keyframes sp{to{transform:rotate(360deg);}}
 
-/* ── SECTION HEADER ── */
-.sh{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
-.sh-title{font-size:12px;font-weight:700;letter-spacing:2px;color:#ddeeff;}
-.sh-line{flex:1;height:1px;background:var(--border);}
-.sh-note{font-size:10px;color:#88ccff;font-family:var(--mono);}
+/* ── LAYOUT ── */
+.wrap{display:grid;grid-template-columns:260px 1fr;gap:10px;padding:10px 14px;max-width:1440px;margin:0 auto;}
 
-/* ── FACILITY CARDS ── */
-.fac-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
-.fac-card{
-  background:#102040;border:1px solid #3a6aaa;border-radius:10px;
-  padding:16px;position:relative;overflow:hidden;
-  cursor:pointer;transition:border-color .25s,transform .2s,box-shadow .2s;
-}
-.fac-card:hover{border-color:var(--accent2);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.4);}
-.fac-card:hover .fac-click-hint{opacity:1;}
-.fac-card-bar{position:absolute;bottom:0;left:0;right:0;height:3px;border-radius:0 0 10px 10px;}
-.fac-name{font-size:12px;font-weight:700;color:#ddeeff;margin-bottom:8px;}
-.fac-sr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
-.fac-score{font-family:'Bebas Neue',cursive;font-size:40px;line-height:1;}
-.fac-risk{font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;}
-.fac-issues{margin-top:6px;display:flex;flex-direction:column;gap:3px;}
-.fac-issue{font-size:10px;color:#aaccee;display:flex;align-items:center;gap:3px;font-weight:500;}
-.fac-click-hint{
-  position:absolute;bottom:12px;right:12px;
-  font-size:9px;font-family:var(--mono);color:#00ffee;
-  opacity:0;transition:opacity .2s;
-}
+/* ── CARD ── */
+.card{background:var(--sur);border:1px solid var(--bdr);padding:12px;position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--ac),transparent);opacity:.2;}
+.ct{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--txd);text-transform:uppercase;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between;}
+.ct-l{display:flex;align-items:center;gap:6px;}
+.ct-l::before{content:'';width:2px;height:10px;background:var(--ac);display:block;}
+.btn{background:rgba(0,207,255,.08);border:1px solid rgba(0,207,255,.22);color:var(--ac);font-family:var(--mono);font-size:9px;padding:2px 7px;cursor:pointer;transition:.2s;}
+.btn:hover{background:rgba(0,207,255,.18);}
 
-/* ── BOTTOM GRID ── */
-.bot-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-.apanel{background:#102040;border:1px solid #3a6aaa;border-radius:12px;padding:18px;}
-.alert-list{display:flex;flex-direction:column;gap:7px;max-height:270px;overflow-y:auto;}
-.alert-list::-webkit-scrollbar{width:3px;}
-.alert-list::-webkit-scrollbar-track{background:var(--bg3);}
-.alert-list::-webkit-scrollbar-thumb{background:#3a6aaa;border-radius:2px;}
-.aitem{display:flex;gap:9px;padding:9px 11px;border-radius:7px;background:#0e1e38;
-  border-left:3px solid;animation:slin .3s ease;}
-@keyframes slin{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}
-.atime{font-family:var(--mono);font-size:9px;color:var(--text3);white-space:nowrap;margin-top:1px;}
-.atitle{font-size:12px;font-weight:700;margin-bottom:2px;}
-.adesc{font-size:11px;color:#cce0ff;line-height:1.5;}
-.guide-tabs{display:flex;gap:4px;margin-bottom:14px;}
-.gtab{padding:4px 11px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;
-  border:1px solid var(--border);background:transparent;color:var(--text3);transition:all .2s;}
-.gtab.active{background:var(--accent);color:#000;border-color:var(--accent);}
-.gcontent{display:none;flex-direction:column;gap:7px;}
-.gcontent.active{display:flex;}
-.gitem{display:flex;gap:9px;padding:9px;background:#0e1e38;border-radius:7px;border-left:2px solid #00e5ff;}
-.gstep{font-family:var(--mono);font-size:10px;color:#00eeff;font-weight:700;white-space:nowrap;}
-.gtext{font-size:11px;color:#cce0ff;line-height:1.6;}
-.gtext strong{color:#ffffff;display:block;margin-bottom:1px;font-size:12px;}
-.no-data{text-align:center;padding:30px;color:#88aacc;font-size:12px;}
-optgroup{color:var(--text3);font-size:11px;}
-optgroup option{color:var(--text);}
+/* ══ 메인 위험 단계 배지 ══ */
+.risk-main{text-align:center;padding:14px 12px 10px;}
+.risk-badge{
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:3px;
+  padding:10px 20px;border:2px solid;margin-bottom:8px;
+  transition:all .6s;
+}
+.risk-badge.safe   {color:var(--lv-safe);   border-color:var(--lv-safe);   box-shadow:0 0 20px rgba(0,230,118,.2);}
+.risk-badge.caution{color:var(--lv-caution);border-color:var(--lv-caution);box-shadow:0 0 20px rgba(56,189,248,.2);}
+.risk-badge.watch  {color:var(--lv-watch);  border-color:var(--lv-watch);  box-shadow:0 0 20px rgba(255,170,0,.25);}
+.risk-badge.alert  {color:var(--lv-alert);  border-color:var(--lv-alert);  box-shadow:0 0 20px rgba(255,53,53,.3);animation:alertpulse 2s infinite;}
+@keyframes alertpulse{0%,100%{box-shadow:0 0 20px rgba(255,53,53,.3);}50%{box-shadow:0 0 35px rgba(255,53,53,.6);}}
+.risk-name{font-size:11px;color:var(--txd);font-family:var(--mono);letter-spacing:1px;margin-bottom:4px;}
+.risk-sub{font-size:11px;color:var(--txd);line-height:1.6;min-height:30px;}
+.score-link{font-size:10px;color:var(--ac);margin-top:6px;cursor:pointer;text-decoration:underline dotted;display:inline-block;}
+.score-link:hover{opacity:.7;}
 
-/* ── LOADING ── */
-#loadingOverlay{position:fixed;inset:0;background:rgba(7,11,20,.93);z-index:999;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;}
-.spinner{width:44px;height:44px;border:3px solid var(--border2);border-top-color:var(--accent);
-  border-radius:50%;animation:spin .8s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-.load-txt{font-family:var(--mono);font-size:12px;color:var(--text2);}
+/* ── 유형별 위험 바 ── */
+.rbars{display:flex;flex-direction:column;gap:9px;}
+.rrow{display:flex;flex-direction:column;gap:3px;}
+.rrh{display:flex;justify-content:space-between;align-items:center;font-size:11px;}
+.rrt{height:4px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;}
+.rrf{height:100%;border-radius:2px;transition:width 1.2s ease;}
+.rrf.c{background:linear-gradient(90deg,#ff6b35,#ff3535);}
+.rrf.f{background:linear-gradient(90deg,#ffaa00,#ff6600);}
+.rrf.e{background:linear-gradient(90deg,#00cfff,#0055ff);}
+.rlvl{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:1px;}
+.rlvl.safe   {background:var(--lv-safe-bg);   color:var(--lv-safe);}
+.rlvl.caution{background:var(--lv-caution-bg);color:var(--lv-caution);}
+.rlvl.watch  {background:var(--lv-watch-bg);  color:var(--lv-watch);}
+.rlvl.alert  {background:var(--lv-alert-bg);  color:var(--lv-alert);}
 
-/* ══════════════════════════════════════
-   DETAIL DRAWER
-══════════════════════════════════════ */
-#drawer-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;
-  opacity:0;pointer-events:none;transition:opacity .3s;
-}
-#drawer-overlay.open{opacity:1;pointer-events:all;}
-#drawer{
-  position:fixed;right:0;top:0;bottom:0;width:580px;max-width:96vw;
-  background:var(--bg2);border-left:1px solid var(--border2);z-index:301;
-  transform:translateX(100%);transition:transform .35s cubic-bezier(.4,0,.2,1);
-  display:flex;flex-direction:column;overflow:hidden;
-}
-#drawer.open{transform:translateX(0);}
-.drw-hdr{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;
-  background:var(--panel);
-}
-.drw-hdr-l{display:flex;align-items:center;gap:12px;}
-.drw-fac-icon{font-size:28px;}
-.drw-fac-name{font-size:16px;font-weight:700;color:#ffffff;}
-.drw-fac-sub{font-size:10px;color:#aaccff;margin-top:2px;font-family:var(--mono);}
-.drw-score-badge{
-  font-family:'Bebas Neue',cursive;font-size:42px;line-height:1;
-  padding:4px 12px;border-radius:8px;border:1px solid;
-}
-.drw-close{background:var(--bg3);border:1px solid var(--border);color:var(--text2);
-  width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:16px;
-  display:flex;align-items:center;justify-content:center;transition:all .2s;margin-left:8px;}
-.drw-close:hover{background:var(--border2);color:var(--text);}
-.drw-body{flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:18px;}
-.drw-body::-webkit-scrollbar{width:4px;}
-.drw-body::-webkit-scrollbar-track{background:var(--bg3);}
-.drw-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+/* ── 기상 그리드 ── */
+.wgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.wi{background:var(--sur2);border:1px solid var(--bdr);padding:7px 9px;}
+.wl{font-size:9px;color:var(--txd);margin-bottom:1px;}
+.wv{font-family:var(--mono);font-size:14px;color:var(--txb);line-height:1.2;}
+.wv.w{color:var(--lv-watch);}.wv.r{color:var(--lv-alert);}
+.wu{font-size:9px;color:var(--txd);}
+.wsub{font-size:9px;color:var(--txd);margin-top:1px;font-family:var(--mono);}
 
-/* 데이터 출처 배지 */
-.data-src-badge{
-  display:inline-flex;align-items:center;gap:6px;
-  font-size:10px;font-family:var(--mono);
-  padding:3px 10px;border-radius:4px;
-  border:1px solid var(--green);color:var(--green);background:rgba(0,229,160,.07);
-}
-.data-src-badge.sim{border-color:var(--yellow);color:var(--yellow);background:rgba(255,200,0,.07);}
+/* ══ 단기 시간별 예보 차트 (오늘 8~18시) ══ */
+.fcwrap{overflow-x:auto;padding-bottom:2px;}
+.fcbars{display:flex;gap:5px;align-items:flex-end;min-width:480px;padding:0 2px;}
+.fccol{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:36px;}
+.fcbarwrap{flex:1;display:flex;flex-direction:column;justify-content:flex-end;width:100%;height:70px;}
+.fcbar{width:100%;border-radius:2px 2px 0 0;min-height:4px;transition:height .8s ease;}
+.fcbar.safe   {background:linear-gradient(180deg,var(--lv-safe),rgba(0,230,118,.2));}
+.fcbar.caution{background:linear-gradient(180deg,var(--lv-caution),rgba(56,189,248,.2));}
+.fcbar.watch  {background:linear-gradient(180deg,var(--lv-watch),rgba(255,170,0,.2));}
+.fcbar.alert  {background:linear-gradient(180deg,var(--lv-alert),rgba(255,53,53,.2));}
+.fclvl{font-family:var(--mono);font-size:8px;}
+.fclvl.safe   {color:var(--lv-safe);}   .fclvl.caution{color:var(--lv-caution);}
+.fclvl.watch  {color:var(--lv-watch);}  .fclvl.alert  {color:var(--lv-alert);}
+.fctemp{font-family:var(--mono);font-size:8px;color:var(--txd);}
+.fchour{font-family:var(--mono);font-size:9px;color:var(--txd);}
+.fcpeak{font-size:10px;color:var(--txd);margin-top:6px;font-family:var(--mono);}
 
-/* 현재 기상 요약 */
-.wx-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-.wxs-item{background:var(--bg3);border-radius:8px;padding:10px;text-align:center;border:1px solid var(--border);}
-.wxs-val{font-family:var(--mono);font-size:20px;font-weight:700;color:#ffffff;}
-.wxs-name{font-size:9px;color:#aaccff;margin-top:2px;font-weight:700;letter-spacing:1px;}
+/* ══ 중기예보 위험 카드 (3~7일) ══ */
+.midgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+.midcard{background:var(--sur2);border:1px solid var(--bdr);border-top:2px solid;padding:9px 6px;text-align:center;}
+.midcard.safe   {border-top-color:var(--lv-safe);}
+.midcard.caution{border-top-color:var(--lv-caution);}
+.midcard.watch  {border-top-color:var(--lv-watch);}
+.midcard.alert  {border-top-color:var(--lv-alert);}
+.mc-day{font-family:var(--mono);font-size:9px;color:var(--txd);margin-bottom:4px;}
+.mc-icon{font-size:18px;margin-bottom:3px;}
+.mc-lvl{font-family:var(--mono);font-size:10px;font-weight:700;margin-bottom:2px;}
+.midcard.safe    .mc-lvl{color:var(--lv-safe);}
+.midcard.caution .mc-lvl{color:var(--lv-caution);}
+.midcard.watch   .mc-lvl{color:var(--lv-watch);}
+.midcard.alert   .mc-lvl{color:var(--lv-alert);}
+.mc-temp{font-family:var(--mono);font-size:9px;color:var(--txd);}
+.mc-rain{font-size:9px;color:var(--txd);}
 
-/* 케이스 테이블 */
-.case-table{width:100%;border-collapse:collapse;font-size:11px;}
-.case-table th{
-  text-align:left;padding:8px 10px;background:#0e1e38;
-  color:#aaccff;font-size:9px;letter-spacing:1.5px;font-weight:700;
-  border-bottom:1px solid #3a6aaa;
-}
-.case-table td{padding:9px 10px;border-bottom:1px solid rgba(58,106,170,.4);vertical-align:top;line-height:1.5;color:#cce0ff;font-size:11px;}
-.case-row{transition:background .15s;}
-.case-row:hover{background:rgba(0,212,255,.04);}
-.case-row.active-case{background:rgba(255,140,0,.08);}
-.case-row.danger-case{background:rgba(255,61,61,.08);animation:rowblink 2.5s infinite;}
-@keyframes rowblink{0%,100%{background:rgba(255,61,61,.08);}50%{background:rgba(255,61,61,.02);}}
-.ctag{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;white-space:nowrap;}
-.cval{font-family:var(--mono);font-size:11px;font-weight:700;}
-.csev{width:60px;}
-.now-indicator{
-  display:inline-flex;align-items:center;gap:4px;
-  font-size:9px;color:var(--accent);font-family:var(--mono);margin-left:4px;
-}
-.now-dot{width:5px;height:5px;background:var(--accent);border-radius:50%;animation:pulse 1.5s infinite;}
+/* ══ 단계별 가이드 ══ */
+.guide-items{display:flex;flex-direction:column;gap:5px;}
+.gi{display:flex;align-items:flex-start;gap:6px;font-size:11px;line-height:1.5;color:var(--tx);}
+.gi::before{content:'›';color:var(--ac);flex-shrink:0;margin-top:1px;}
+.gtitle{font-family:var(--mono);font-size:9px;letter-spacing:1px;margin-bottom:7px;padding:3px 8px;display:inline-block;}
+.gtitle.safe   {background:var(--lv-safe-bg);   color:var(--lv-safe);}
+.gtitle.caution{background:var(--lv-caution-bg);color:var(--lv-caution);}
+.gtitle.watch  {background:var(--lv-watch-bg);  color:var(--lv-watch);}
+.gtitle.alert  {background:var(--lv-alert-bg);  color:var(--lv-alert);}
 
-/* 대응 조치 */
-.action-list{display:flex;flex-direction:column;gap:8px;}
-.action-item{
-  display:flex;gap:10px;padding:10px 12px;
-  background:var(--bg3);border-radius:8px;border-left:3px solid;
-}
-.action-step{font-family:var(--mono);font-size:10px;font-weight:700;white-space:nowrap;margin-top:1px;}
-.action-body{}
-.action-title{font-size:12px;font-weight:700;margin-bottom:3px;color:#ffffff;}
-.action-desc{font-size:11px;color:#cce0ff;line-height:1.6;}
-.action-ref{font-size:9px;color:var(--text3);margin-top:4px;font-family:var(--mono);}
+/* ══ 조건부 사례 ══ */
+.case-list{display:flex;flex-direction:column;gap:7px;}
+.casec{background:var(--sur2);border:1px solid var(--bdr);border-left:3px solid;padding:10px 12px;cursor:pointer;transition:.15s;display:none;}
+.casec.show{display:block;}
+.casec:hover{background:rgba(255,255,255,.03);}
+.casec.chem{border-left-color:var(--lv-alert);}
+.casec.fall{border-left-color:var(--lv-watch);}
+.casec.env {border-left-color:var(--lv-caution);}
+.casec-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.casec-type{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--txd);}
+.casec-lvb{font-family:var(--mono);font-size:9px;padding:1px 5px;}
+.casec-lvb.watch{background:var(--lv-watch-bg);color:var(--lv-watch);border:1px solid rgba(255,170,0,.3);}
+.casec-lvb.alert{background:var(--lv-alert-bg);color:var(--lv-alert);border:1px solid rgba(255,53,53,.3);}
+.casec-title{font-size:12px;font-weight:700;color:var(--txb);margin-bottom:3px;}
+.casec-trig{font-size:10px;color:var(--txd);margin-bottom:4px;}
+.casec-foot{display:flex;justify-content:space-between;font-size:10px;color:var(--txd);padding-top:5px;border-top:1px solid var(--bdr);}
+.no-case{font-size:11px;color:var(--txd);text-align:center;padding:12px;border:1px dashed var(--bdr);}
 
-/* 임계값 게이지 */
-.thresh-gauges{display:flex;flex-direction:column;gap:10px;}
-.tg-item{display:flex;flex-direction:column;gap:4px;}
-.tg-header{display:flex;justify-content:space-between;align-items:center;}
-.tg-name{font-size:10px;color:#cce0ff;font-weight:700;}
-.tg-reading{font-family:var(--mono);font-size:11px;}
-.tg-track{height:8px;background:var(--bg3);border-radius:4px;position:relative;overflow:hidden;}
-.tg-fill{height:100%;border-radius:4px;transition:width .8s ease;}
-.tg-marker{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.5);}
+/* ── MODAL ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.80);z-index:500;display:none;align-items:center;justify-content:center;padding:16px;}
+.overlay.open{display:flex;}
+.modal{background:var(--sur);border:1px solid var(--bdr);max-width:620px;width:100%;max-height:88vh;overflow-y:auto;position:relative;}
+.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--ac),var(--lv-watch),var(--ac));}
+.mhead{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--bdr);}
+.mtitle{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--txb);}
+.mclose{background:none;border:1px solid var(--bdr);color:var(--txd);width:24px;height:24px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.mclose:hover{border-color:var(--lv-alert);color:var(--lv-alert);}
+.mbody{padding:16px;}
+.msec{margin-bottom:14px;}
+.msec-t{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ac);border-bottom:1px solid var(--bdr);padding-bottom:4px;margin-bottom:7px;}
+.dtable{width:100%;border-collapse:collapse;font-size:11px;}
+.dtable th{font-family:var(--mono);font-size:9px;color:var(--txd);padding:4px 7px;text-align:left;border-bottom:1px solid var(--bdr);background:var(--sur2);}
+.dtable td{padding:6px 7px;border-bottom:1px solid rgba(26,42,72,.4);font-family:var(--mono);font-size:10px;}
+.tok{color:var(--lv-safe);}.twn{color:var(--lv-watch);}.tdg{color:var(--lv-alert);}
+.formula{background:var(--sur2);border:1px solid var(--bdr);border-left:2px solid var(--ac);padding:10px 12px;font-family:var(--mono);font-size:11px;line-height:2;margin-bottom:7px;}
+.formula .ft{color:var(--txd);font-size:8px;letter-spacing:1px;margin-bottom:2px;}
+.fvar{color:var(--lv-watch);}.fcoef{color:var(--lv-safe);}
+.rcase{background:var(--sur2);border:1px solid var(--bdr);padding:9px 11px;margin-bottom:6px;font-size:11px;line-height:1.8;}
+.rcase-title{font-weight:700;color:var(--txb);margin-bottom:3px;font-size:12px;}
+.rl{display:inline-block;font-family:var(--mono);font-size:8px;padding:2px 5px;margin-right:4px;margin-bottom:4px;}
+.rl-d{background:var(--lv-alert-bg);color:var(--lv-alert);border:1px solid rgba(255,53,53,.3);}
+.rl-w{background:var(--lv-watch-bg);color:var(--lv-watch);border:1px solid rgba(255,170,0,.3);}
 
-@media(max-width:1200px){
-  .emi-row{grid-template-columns:260px 1fr;}
-  .fac-grid{grid-template-columns:repeat(2,1fr);}
-  .wx-grid{grid-template-columns:repeat(2,1fr);}
-}
-@media(max-width:768px){
-  .emi-row{grid-template-columns:1fr;}
-  .bot-grid{grid-template-columns:1fr;}
-  .fac-grid{grid-template-columns:1fr 1fr;}
-  #drawer{width:100vw;}
-}
-
-/* ══════════════════════════════════
-   AX AI 분석 패널
-══════════════════════════════════ */
-.ax-section { margin-bottom: 20px; }
-
-.ax-panel {
-  background: linear-gradient(135deg, #0a1628 0%, #0e2040 50%, #0a1a30 100%);
-  border: 1px solid var(--accent);
-  border-radius: 14px;
-  overflow: hidden;
-  position: relative;
-}
-.ax-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at top left, rgba(0,229,255,0.06) 0%, transparent 60%);
-  pointer-events: none;
-}
-.ax-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(0,229,255,0.2);
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.ax-header-l { display: flex; align-items: center; gap: 10px; }
-.ax-badge {
-  background: linear-gradient(135deg, var(--accent), #0066cc);
-  color: #000;
-  font-family: 'Bebas Neue', cursive;
-  font-size: 16px;
-  letter-spacing: 2px;
-  padding: 3px 10px;
-  border-radius: 4px;
-}
-.ax-title { font-size: 13px; font-weight: 700; color: #fff; }
-.ax-sub { font-size: 10px; color: var(--text3); margin-top: 1px; }
-.ax-btn {
-  background: linear-gradient(135deg, rgba(0,229,255,0.15), rgba(0,102,204,0.15));
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  padding: 7px 18px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12px;
-  font-family: var(--sans);
-  font-weight: 700;
-  transition: all .2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-.ax-btn:hover { background: rgba(0,229,255,0.25); transform: translateY(-1px); }
-.ax-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-.ax-btn-analyze { background: linear-gradient(135deg,rgba(0,255,176,.15),rgba(0,180,100,.15)); border-color: var(--green); color: var(--green); }
-.ax-btn-analyze:hover { background: rgba(0,255,176,.25); }
-
-.ax-body { padding: 0 20px 20px; }
-
-/* 탭 */
-.ax-tabs { display: flex; gap: 4px; padding: 14px 0 10px; flex-wrap: wrap; }
-.ax-tab {
-  padding: 5px 14px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border2);
-  background: transparent;
-  color: var(--text3);
-  transition: all .2s;
-  font-family: var(--sans);
-}
-.ax-tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
-.ax-tab-content { display: none; }
-.ax-tab-content.active { display: block; }
-
-/* AI 응답 출력 */
-.ax-output {
-  min-height: 120px;
-  background: rgba(0,0,0,.2);
-  border: 1px solid rgba(0,229,255,.1);
-  border-radius: 10px;
-  padding: 16px;
-  font-size: 12px;
-  line-height: 1.8;
-  color: var(--text2);
-  white-space: pre-wrap;
-  word-break: keep-all;
-  position: relative;
-}
-.ax-output.streaming { border-color: rgba(0,229,255,.4); }
-.ax-output.streaming::after {
-  content: '▋';
-  display: inline-block;
-  animation: blink .7s step-end infinite;
-  color: var(--accent);
-  margin-left: 2px;
-}
-@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
-
-.ax-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 120px;
-  color: var(--text3);
-}
-.ax-placeholder-ico { font-size: 36px; opacity: .5; }
-.ax-placeholder-txt { font-size: 12px; text-align: center; line-height: 1.6; }
-
-/* AI 분석 결과 포맷 */
-.ax-section-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
-  letter-spacing: 1.5px;
-  margin: 12px 0 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(0,229,255,.15);
-}
-.ax-risk-item {
-  display: flex;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 6px;
-  margin-bottom: 5px;
-  background: rgba(0,0,0,.15);
-  border-left: 3px solid;
-  font-size: 11px;
-  line-height: 1.6;
-}
-.ax-risk-lv { font-family: var(--mono); font-size: 9px; font-weight: 700; white-space: nowrap; padding-top: 1px; }
-
-/* 예측 카드 행 */
-.ax-predict-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-top: 8px; }
-.ax-predict-card {
-  background: rgba(0,0,0,.2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
-  text-align: center;
-}
-.ax-predict-time { font-family: var(--mono); font-size: 9px; color: var(--text3); margin-bottom: 4px; }
-.ax-predict-score { font-family: 'Bebas Neue', cursive; font-size: 28px; line-height: 1; }
-.ax-predict-label { font-size: 9px; margin-top: 2px; }
-
-/* 채팅 인터페이스 */
-.ax-chat { display: flex; flex-direction: column; gap: 10px; }
-.ax-chat-history {
-  max-height: 260px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 4px 0;
-}
-.ax-chat-history::-webkit-scrollbar { width: 3px; }
-.ax-chat-history::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-.ax-msg {
-  padding: 9px 13px;
-  border-radius: 10px;
-  font-size: 12px;
-  line-height: 1.7;
-  max-width: 90%;
-  word-break: keep-all;
-}
-.ax-msg.user {
-  background: rgba(0,229,255,.1);
-  border: 1px solid rgba(0,229,255,.2);
-  color: #cce8ff;
-  align-self: flex-end;
-  border-radius: 10px 10px 2px 10px;
-}
-.ax-msg.ai {
-  background: rgba(0,255,176,.07);
-  border: 1px solid rgba(0,255,176,.15);
-  color: var(--text2);
-  align-self: flex-start;
-  border-radius: 10px 10px 10px 2px;
-  white-space: pre-wrap;
-}
-.ax-msg.ai.thinking {
-  color: var(--text3);
-  font-style: italic;
-  animation: fadeInOut 1.5s infinite;
-}
-@keyframes fadeInOut { 0%,100%{opacity:.5;} 50%{opacity:1;} }
-.ax-chat-input-row { display: flex; gap: 8px; }
-.ax-chat-input {
-  flex: 1;
-  background: rgba(0,0,0,.3);
-  border: 1px solid var(--border2);
-  color: var(--text);
-  padding: 9px 13px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-family: var(--sans);
-  outline: none;
-  transition: border-color .2s;
-}
-.ax-chat-input:focus { border-color: var(--accent); }
-.ax-chat-send {
-  background: var(--accent);
-  border: none;
-  color: #000;
-  padding: 9px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 13px;
-  transition: all .2s;
-}
-.ax-chat-send:hover { background: #00aadd; }
-.ax-chat-send:disabled { opacity: .5; cursor: not-allowed; }
-
-/* 빠른 질문 버튼 */
-.ax-quick-btns { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
-.ax-qbtn {
-  background: rgba(0,229,255,.08);
-  border: 1px solid rgba(0,229,255,.2);
-  color: var(--text3);
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 10px;
-  cursor: pointer;
-  transition: all .2s;
-  font-family: var(--sans);
-}
-.ax-qbtn:hover { background: rgba(0,229,255,.2); color: var(--text); }
-
-/* 토큰 사용량 */
-.ax-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 20px;
-  border-top: 1px solid rgba(0,229,255,.1);
-  font-size: 9px;
-  font-family: var(--mono);
-  color: var(--text3);
-}
+.rcol{display:flex;flex-direction:column;gap:10px;}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr;}.midgrid{grid-template-columns:repeat(3,1fr);}.wgrid{grid-template-columns:repeat(4,1fr);}}
 </style>
 </head>
 <body>
 
-<!-- 로딩 -->
-<div id="loadingOverlay">
-  <div class="spinner"></div>
-  <div class="load-txt" id="loadTxt">기상 데이터 불러오는 중...</div>
-  <div style="font-size:10px;color:#4a7aaa;font-family:var(--mono);margin-top:4px;" id="loadDetail">Open-Meteo API 연결 시도 중</div>
-</div>
-
-<!-- Drawer Overlay -->
-<div id="drawer-overlay" onclick="closeDrawer()"></div>
-
-<!-- Detail Drawer -->
-<div id="drawer">
-  <div class="drw-hdr">
-    <div class="drw-hdr-l">
-      <div class="drw-fac-icon" id="drw-icon">🏭</div>
-      <div>
-        <div class="drw-fac-name" id="drw-name">--</div>
-        <div class="drw-fac-sub" id="drw-sub">--</div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <div class="drw-score-badge" id="drw-score-badge">--</div>
-      <button class="drw-close" onclick="closeDrawer()">✕</button>
-    </div>
-  </div>
-  <div class="drw-body" id="drw-body">
-    <!-- JS로 채움 -->
-  </div>
-</div>
-
-<!-- Header -->
-<header class="hdr">
-  <div class="hdr-l">
-    <div class="logo">EMI</div>
+<header>
+  <div class="hlogo">
+    <div class="hicon"><b></b><b></b><b></b><b></b></div>
     <div>
-      <div class="hdr-title">설비 영향지수 대시보드 <span style="font-size:11px;background:rgba(255,140,0,.15);color:var(--orange);border:1px solid var(--orange);padding:2px 8px;border-radius:4px;font-weight:600;margin-left:6px;">여수 석유화학산단</span></div>
-      <div class="hdr-sub">Equipment Meteorological Impact · 여수국가산단 / 여천NCC / GS칼텍스 권역 기상 리스크</div>
+      <div class="htitle">여수 국가산단 <em>사고 예측</em></div>
+      <div style="font-size:9px;color:var(--txd);font-family:var(--mono);letter-spacing:1px;margin-top:1px;">YEOSU IND. COMPLEX · ACCIDENT PREDICTION v3.0</div>
     </div>
   </div>
-  <div class="hdr-r">
-    <div class="live"><div class="live-dot"></div>LIVE</div>
+  <div class="hmeta">
+    <span id="lastupdate" style="color:var(--txd)">로딩 중...</span>
+    <div class="live"><div class="ldot"></div>LIVE</div>
     <div id="clock">--:--:--</div>
-    <button class="rbtn" onclick="fetchAllData()">↻ 새로고침</button>
-    <button class="rbtn" onclick="openKeyManager()" style="border-color:var(--green);color:var(--green);" title="Groq API 키 관리">🔑 AI 키</button>
   </div>
 </header>
 
-<!-- Main -->
-<div class="main">
+<!-- 데이터 소스 상태 표시줄 -->
+<div class="datasrc-bar">
+  <div class="ds-item"><div class="ds-dot load" id="dot-rt"></div><span id="src-rt">현재기상...</span></div>
+  <div class="ds-item"><div class="ds-dot load" id="dot-fc"></div><span id="src-fc">시간별예보...</span></div>
+  <div class="ds-item"><div class="ds-dot load" id="dot-air"></div><span id="src-air">대기오염...</span></div>
+  <span style="color:rgba(74,96,128,.5)">|</span>
+  <span id="data-updated" style="color:var(--txd)">Actions 갱신시각: 수신 중...</span>
+</div>
 
-  <div class="loc-bar">
-    <span class="loc-label">모니터링 지점</span>
-    <select class="loc-sel" id="regionSelect" onchange="onRegionChange()">
-      <optgroup label="── 여수·광양 권역 ──">
-        <option value="여수석화산단" selected>여수 석유화학산단</option>
-        <option value="여수시내">여수 시내</option>
-        <option value="광양제철">광양 제철단지</option>
-        <option value="순천">순천시</option>
-      </optgroup>
-      <optgroup label="── 전국 주요 도시 ──">
-        <option value="서울">서울특별시</option>
-        <option value="부산">부산광역시</option>
-        <option value="대구">대구광역시</option>
-        <option value="인천">인천광역시</option>
-        <option value="광주">광주광역시</option>
-        <option value="대전">대전광역시</option>
-        <option value="울산">울산광역시</option>
-        <option value="수원">수원시</option>
-        <option value="청주">청주시</option>
-        <option value="전주">전주시</option>
-      </optgroup>
-    </select>
-    <span id="lastUpdate">--</span>
-    <span class="api-st loading" id="apiStatus">초기화 중...</span>
-  </div>
-
-  <!-- API 에러 배너 -->
-  <div id="apiErrorBanner" style="display:none;background:rgba(255,61,61,.1);border:1px solid var(--red);border-radius:8px;padding:10px 16px;margin-bottom:12px;align-items:center;gap:10px;">
-    <span style="font-size:16px;">⚠️</span>
-    <span id="bannerMsg" style="font-size:11px;color:#ffaaaa;flex:1;"></span>
-    <button onclick="document.getElementById('apiErrorBanner').style.display='none';fetchAllData();"
-      style="background:var(--red);border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px;font-family:var(--sans);">재시도</button>
-  </div>
-
-  <!-- 지역 특성 안내 (동적) -->
-  <div id="regionNote" style="background:rgba(255,140,0,.07);border:1px solid rgba(255,140,0,.25);border-radius:8px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-    <span style="font-size:16px;" id="regionNoteIcon">🌊</span>
-    <span style="font-size:11px;color:var(--text2);line-height:1.6;" id="regionNoteText">
-      <strong style="color:var(--orange);">여수 석유화학산단 지역 특성</strong> ·
-      해안 인접 지형으로 <strong>남서풍/편서풍 시 오염물질 여천·돌산 방향 이동</strong> 주의 ·
-      여름철 <strong>고온다습(RH 80%+)</strong> 빈도 높음 · 태풍 직·간접 영향권 (6~9월) ·
-      Open-Meteo (34.74°N 127.74°E) 기준 실시간 수집
-    </span>
-  </div>
-
-  <!-- EMI + 기상 -->
-  <div class="emi-row">
-    <div class="emi-card">
-      <div class="emi-lbl">EMI SCORE</div>
-      <div class="emi-val" id="emiScore">--</div>
-      <div class="emi-unit">/ 100</div>
-      <div class="emi-badge" id="emiLevelBadge">
-        <span id="emiLevelIcon">●</span>
-        <span id="emiLevelText">산출 중...</span>
-      </div>
-      <div class="emi-gauge"><div class="emi-gfill" id="emiGaugeFill" style="width:0%"></div></div>
-      <div class="factors">
-        <div class="frow"><span class="fname">온도 영향</span><div class="fbar-w"><div class="fbar" id="fb-temp"></div></div><span class="fval" id="fv-temp">--</span></div>
-        <div class="frow"><span class="fname">습도 영향</span><div class="fbar-w"><div class="fbar" id="fb-hum"></div></div><span class="fval" id="fv-hum">--</span></div>
-        <div class="frow"><span class="fname">풍속 영향</span><div class="fbar-w"><div class="fbar" id="fb-wind"></div></div><span class="fval" id="fv-wind">--</span></div>
-        <div class="frow"><span class="fname">강수 영향</span><div class="fbar-w"><div class="fbar" id="fb-rain"></div></div><span class="fval" id="fv-rain">--</span></div>
-        <div class="frow"><span class="fname">기압 영향</span><div class="fbar-w"><div class="fbar" id="fb-press"></div></div><span class="fval" id="fv-press">--</span></div>
-      </div>
-      <div class="fcst-row" id="fcstRow"></div>
+<div class="ticker">
+  <div class="tlbl">LIVE</div>
+  <div class="ttrack">
+    <div class="tinner">
+      <span>&#127777; 기온</span>&nbsp;<span class="v" id="tk-t">--</span>&nbsp;&nbsp;
+      <span>&#128167; 습도</span>&nbsp;<span class="v" id="tk-h">--</span>&nbsp;&nbsp;
+      <span>&#128168; 풍속</span>&nbsp;<span class="v" id="tk-w">--</span>&nbsp;&nbsp;
+      <span>PM2.5</span>&nbsp;<span class="v" id="tk-pm">--</span>&nbsp;&nbsp;
+      <span>SO2</span>&nbsp;<span class="v" id="tk-so2">--</span>&nbsp;&nbsp;
+      <span>&#916;T24h</span>&nbsp;<span class="v" id="tk-dt">--</span>&nbsp;&nbsp;
+      <span>&#128202; 현재등급</span>&nbsp;<span class="v" id="tk-lvl">--</span>&nbsp;&nbsp;
+      <!-- 반복 -->
+      <span>&#127777; 기온</span>&nbsp;<span class="v" id="tk-t2">--</span>&nbsp;&nbsp;
+      <span>&#128167; 습도</span>&nbsp;<span class="v" id="tk-h2">--</span>&nbsp;&nbsp;
+      <span>&#128168; 풍속</span>&nbsp;<span class="v" id="tk-w2">--</span>&nbsp;&nbsp;
+      <span>PM2.5</span>&nbsp;<span class="v" id="tk-pm2">--</span>&nbsp;&nbsp;
+      <span>SO2</span>&nbsp;<span class="v" id="tk-so2-2">--</span>&nbsp;&nbsp;
+      <span>&#916;T24h</span>&nbsp;<span class="v" id="tk-dt2">--</span>&nbsp;&nbsp;
+      <span>&#128202; 현재등급</span>&nbsp;<span class="v" id="tk-lvl2">--</span>&nbsp;&nbsp;
     </div>
+  </div>
+</div>
 
-    <div class="wx-grid">
-      <div class="mc" id="mc-temp"><div class="mc-ico">🌡️</div><div class="mc-name">온도</div><div class="mc-val" id="m-temp">--</div><div class="mc-unit">°C</div><div class="mc-st" id="ms-temp">-</div><div class="trend" id="tr-temp"></div></div>
-      <div class="mc" id="mc-hum"><div class="mc-ico">💧</div><div class="mc-name">상대습도</div><div class="mc-val" id="m-hum">--</div><div class="mc-unit">%</div><div class="mc-st" id="ms-hum">-</div><div class="trend" id="tr-hum"></div></div>
-      <div class="mc" id="mc-wind"><div class="mc-ico">💨</div><div class="mc-name">풍속</div><div class="mc-val" id="m-wind">--</div><div class="mc-unit">m/s</div><div class="mc-st" id="ms-wind">-</div><div class="trend" id="tr-wind"></div></div>
-      <div class="mc" id="mc-wdir"><div class="mc-ico">🧭</div><div class="mc-name">풍향</div><div class="mc-val" id="m-wdir" style="font-size:18px;padding-top:4px">--</div><div class="mc-unit" id="m-wdeg">--°</div><div class="mc-st" id="ms-wdir">-</div></div>
-      <div class="mc" id="mc-rain"><div class="mc-ico">🌧️</div><div class="mc-name">강수량(1h)</div><div class="mc-val" id="m-rain">--</div><div class="mc-unit">mm</div><div class="mc-st" id="ms-rain">-</div></div>
-      <div class="mc" id="mc-press"><div class="mc-ico">⬇️</div><div class="mc-name">대기압</div><div class="mc-val" id="m-press">--</div><div class="mc-unit">hPa</div><div class="mc-st" id="ms-press">-</div></div>
+<div class="wrap">
+<!-- ══════ LEFT ══════ -->
+<div style="display:flex;flex-direction:column;gap:10px;">
+
+  <!-- 종합 위험 단계 -->
+  <div class="card">
+    <div class="ct">
+      <div class="ct-l">현재 종합 위험 단계</div>
+      <button class="btn" onclick="loadAll()">&#8635; 새로고침</button>
+    </div>
+    <div class="risk-main">
+      <div class="risk-badge safe" id="riskBadge">
+        <span class="spin"></span>
+      </div>
+      <div class="risk-name" id="riskName">데이터 수신 중</div>
+      <div class="risk-sub" id="riskSub">기상 데이터 분석 후 표시됩니다</div>
+      <div class="score-link" onclick="openModal('score')">&#128269; 계산 수식 &amp; 점수 확인</div>
     </div>
   </div>
 
-  <!-- 방지시설 -->
-  <div class="sh">
-    <div class="sh-title">방지시설 영향지수</div>
-    <div class="sh-line"></div>
-    <div class="sh-note">클릭 → 기상 영향 케이스 상세 분석</div>
-  </div>
-  <div class="fac-grid" id="facilityGrid"></div>
-
-  <!-- 하단 -->
-  <div class="bot-grid">
-    <div class="apanel">
-      <div class="sh"><div class="sh-title">⚠ 실시간 알림</div><div class="sh-line"></div><div class="sh-note" id="alertCount">0건</div></div>
-      <div class="alert-list" id="alertList"><div class="no-data">데이터 수집 중...</div></div>
-    </div>
-    <div class="apanel">
-      <div class="sh"><div class="sh-title">📋 대응 가이드</div><div class="sh-line"></div></div>
-      <div class="guide-tabs">
-        <button class="gtab active" onclick="switchGuide(this,'immediate')">즉시 조치</button>
-        <button class="gtab" onclick="switchGuide(this,'maintenance')">정비 권고</button>
-        <button class="gtab" onclick="switchGuide(this,'monitoring')">모니터링</button>
+  <!-- 유형별 위험 단계 -->
+  <div class="card">
+    <div class="ct"><div class="ct-l">유형별 위험 단계</div></div>
+    <div class="rbars">
+      <div class="rrow">
+        <div class="rrh"><span style="font-size:11px">&#128308; 화공&#183;설비</span><span class="rlvl safe" id="rl-chem">--</span></div>
+        <div class="rrt"><div class="rrf c" id="bar-chem" style="width:0%"></div></div>
+        <div style="font-size:10px;color:var(--txd);margin-top:2px" id="trig-chem"><span class="spin"></span></div>
       </div>
-      <div id="guide-immediate" class="gcontent active"></div>
-      <div id="guide-maintenance" class="gcontent"></div>
-      <div id="guide-monitoring" class="gcontent"></div>
-    </div>
-  </div>
-
-  <!-- ══ AX AI 분석 패널 ══ -->
-  <div class="ax-section">
-    <div class="sh">
-      <div class="sh-title">🤖 AX · AI 실시간 분석</div>
-      <div class="sh-line"></div>
-      <div class="sh-note">Claude AI 기반 · 현재 기상 데이터 자동 연동</div>
-    </div>
-
-    <div class="ax-panel">
-      <div class="ax-header">
-        <div class="ax-header-l">
-          <div class="ax-badge">AX</div>
-          <div>
-            <div class="ax-title">AI 설비 영향 분석 엔진</div>
-            <div class="ax-sub">Claude AI · 현재 기상 + 방지시설 데이터 실시간 분석</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="ax-btn ax-btn-analyze" onclick="runAIAnalysis()" id="btnAnalyze">
-            🧠 AI 종합 분석 실행
-          </button>
-          <button class="ax-btn" onclick="runAIPredict()" id="btnPredict">
-            📈 EMI 예측
-          </button>
-        </div>
+      <div class="rrow">
+        <div class="rrh"><span style="font-size:11px">&#128993; 산업안전</span><span class="rlvl safe" id="rl-fall">--</span></div>
+        <div class="rrt"><div class="rrf f" id="bar-fall" style="width:0%"></div></div>
+        <div style="font-size:10px;color:var(--txd);margin-top:2px" id="trig-fall"><span class="spin"></span></div>
       </div>
-
-      <div class="ax-body">
-        <!-- 탭 -->
-        <div class="ax-tabs">
-          <button class="ax-tab active" onclick="switchAxTab(this,'tab-analyze')">종합 분석</button>
-          <button class="ax-tab" onclick="switchAxTab(this,'tab-risk');runRiskEval()">리스크 평가</button>
-          <button class="ax-tab" onclick="switchAxTab(this,'tab-predict')">EMI 예측</button>
-          <button class="ax-tab" onclick="switchAxTab(this,'tab-chat')">AI 질의응답</button>
-        </div>
-
-        <!-- 탭 1: 종합 분석 -->
-        <div class="ax-tab-content active" id="tab-analyze">
-          <div id="analyzeOutput" class="ax-output">
-            <div class="ax-placeholder">
-              <div class="ax-placeholder-ico">🧠</div>
-              <div class="ax-placeholder-txt">
-                <strong style="color:#cce0ff;">"AI 종합 분석 실행"</strong> 버튼을 클릭하면<br>
-                현재 기상 데이터를 기반으로 Claude AI가<br>
-                방지시설별 리스크와 대응방안을 분석합니다
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 탭 2: 리스크 평가 -->
-        <div class="ax-tab-content" id="tab-risk">
-          <div id="riskOutput" class="ax-output">
-            <div class="ax-placeholder">
-              <div class="ax-placeholder-ico">⚡</div>
-              <div class="ax-placeholder-txt">
-                AI 분석 실행 후 방지시설별<br>
-                상세 리스크 평가가 표시됩니다
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 탭 3: EMI 예측 -->
-        <div class="ax-tab-content" id="tab-predict">
-          <div id="predictOutput">
-            <div class="ax-placeholder" style="min-height:80px;">
-              <div class="ax-placeholder-ico">📈</div>
-              <div class="ax-placeholder-txt">
-                "EMI 예측" 버튼 클릭 시<br>
-                향후 기상 변화에 따른 EMI 추이를 AI가 예측합니다
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 탭 4: AI 질의응답 -->
-        <div class="ax-tab-content" id="tab-chat">
-          <div class="ax-chat">
-            <div class="ax-quick-btns">
-              <button class="ax-qbtn" onclick="quickAsk('지금 가장 위험한 방지시설은?')">⚠ 가장 위험한 시설</button>
-              <button class="ax-qbtn" onclick="quickAsk('백필터 지금 상태 분석해줘')">🏭 백필터 분석</button>
-              <button class="ax-qbtn" onclick="quickAsk('오늘 기상 조건에서 TMS 초과 가능성은?')">📊 TMS 초과 가능성</button>
-              <button class="ax-qbtn" onclick="quickAsk('지금 바로 해야 할 조치 알려줘')">🚨 즉시 조치</button>
-              <button class="ax-qbtn" onclick="quickAsk('내일 기상 변화에 대비한 점검 계획 세워줘')">📅 점검 계획</button>
-              <button class="ax-qbtn" onclick="quickAsk('풍향이 방지시설에 미치는 영향은?')">💨 풍향 영향</button>
-            </div>
-            <div class="ax-chat-history" id="chatHistory"></div>
-            <div class="ax-chat-input-row">
-              <input class="ax-chat-input" id="chatInput" type="text"
-                placeholder="방지시설, 기상, 대응방안 등 무엇이든 질문하세요..."
-                onkeydown="if(event.key==='Enter'&&!event.shiftKey){sendChat();event.preventDefault();}">
-              <button class="ax-chat-send" id="chatSend" onclick="sendChat()">▶</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="ax-footer">
-        <span id="axModel">Groq · LLaMA-3.3-70B · 완전무료</span>
-        <span id="axTokens">대기 중</span>
+      <div class="rrow">
+        <div class="rrh"><span style="font-size:11px">&#128309; 환경&#183;설비</span><span class="rlvl safe" id="rl-env">--</span></div>
+        <div class="rrt"><div class="rrf e" id="bar-env" style="width:0%"></div></div>
+        <div style="font-size:10px;color:var(--txd);margin-top:2px" id="trig-env"><span class="spin"></span></div>
       </div>
     </div>
   </div>
 
+  <!-- 현재 기상 (단기예보 최신값) -->
+  <div class="card">
+    <div class="ct"><div class="ct-l">현재 기상 (단기예보)</div></div>
+    <div class="wgrid">
+      <div class="wi"><div class="wl">&#127777; 기온</div><div class="wv" id="w-t"><span class="spin"></span></div><div class="wsub" id="ws-t"></div></div>
+      <div class="wi"><div class="wl">&#128167; 습도</div><div class="wv" id="w-h"><span class="spin"></span></div></div>
+      <div class="wi"><div class="wl">&#128168; 풍속</div><div class="wv" id="w-w"><span class="spin"></span></div><div class="wsub" id="ws-w"></div></div>
+      <div class="wi"><div class="wl">&#127783; 강수</div><div class="wv" id="w-r"><span class="spin"></span></div></div>
+      <div class="wi"><div class="wl">SO&#x00B2;</div><div class="wv" id="w-so2"><span class="spin"></span></div></div>
+      <div class="wi"><div class="wl">PM&#x2082;.&#x2085;</div><div class="wv" id="w-pm"><span class="spin"></span></div><div class="wsub" id="ws-pm"></div></div>
+      <div class="wi"><div class="wl">NO&#x00B2;</div><div class="wv" id="w-no2"><span class="spin"></span></div></div>
+      <div class="wi"><div class="wl">&#916;T&#x2082;&#x2084;h</div><div class="wv" id="w-dt"><span class="spin"></span></div></div>
+    </div>
+  </div>
+
+  <!-- 단계별 관찰 가이드 -->
+  <div class="card">
+    <div class="ct"><div class="ct-l">단계별 관찰 가이드</div></div>
+    <div id="guideContent"><div style="color:var(--txd);font-size:11px;padding:8px;text-align:center">수신 후 표시</div></div>
+  </div>
+
+</div><!-- /left -->
+
+<!-- ══════ RIGHT ══════ -->
+<div class="rcol">
+
+  <!-- 오늘 8~18시 시간별 예보 (단기예보) -->
+  <div class="card">
+    <div class="ct">
+      <div class="ct-l">오늘 08~18시 시간별 위험도 (단기예보 기반)</div>
+    </div>
+    <div id="shortFcArea"><div style="text-align:center;padding:20px;color:var(--txd);font-size:11px"><span class="spin"></span>&nbsp; 단기예보 수신 중...</div></div>
+    <div id="shortFcPeak" class="fcpeak"></div>
+  </div>
+
+  <!-- 오늘 하루 전체 시간별 위험도 (00~23시) -->
+  <div class="card">
+    <div class="ct">
+      <div class="ct-l">오늘 하루 시간별 위험도 예측 (00~23시)</div>
+      <span style="font-size:9px;color:var(--txd);font-family:var(--mono)" id="allday-src"></span>
+    </div>
+    <div id="alldayArea"><div style="text-align:center;padding:20px;color:var(--txd);font-size:11px"><span class="spin"></span>&nbsp; 오늘 예보 수신 중...</div></div>
+    <div id="alldayMeta" style="margin-top:6px;font-size:9px;color:var(--txd);font-family:var(--mono)"></div>
+  </div>
+
+  <!-- 조건부 사고 사례 -->
+  <div class="card">
+    <div class="ct">
+      <div class="ct-l">현재 조건 관련 사고 사례</div>
+      <span style="font-size:9px;color:var(--txd);font-family:var(--mono)">위험 조건 시 표시 · 클릭 &rarr; 상세</span>
+    </div>
+    <div class="case-list">
+      <div class="no-case" id="noCase">현재 모든 지표 정상 — 표시할 사례 없음</div>
+      <div class="casec chem" id="cc-chem" onclick="openModal('m-chem')">
+        <div class="casec-h"><div class="casec-type">CHEMICAL · 가스누출/폭발</div><span class="casec-lvb alert" id="cc-lv-chem">경계</span></div>
+        <div class="casec-title">&#128308; 유증기 체류 &rarr; 폭발 위험</div>
+        <div class="casec-trig" id="cc-trig-chem">--</div>
+        <div class="casec-foot"><span>2019 여수NCC 화재 / 2012 세계박람회 폭발</span><span>상세 &rsaquo;</span></div>
+      </div>
+      <div class="casec fall" id="cc-fall" onclick="openModal('m-fall')">
+        <div class="casec-h"><div class="casec-type">INDUSTRIAL · 추락/낙상</div><span class="casec-lvb watch" id="cc-lv-fall">주의</span></div>
+        <div class="casec-title">&#128993; 고소작업 추락 위험</div>
+        <div class="casec-trig" id="cc-trig-fall">--</div>
+        <div class="casec-foot"><span>2021 여수 탑상 추락 / KOSHA 고온기 통계</span><span>상세 &rsaquo;</span></div>
+      </div>
+      <div class="casec env" id="cc-env" onclick="openModal('m-env')">
+        <div class="casec-h"><div class="casec-type">FACILITY · RTO/방지시설</div><span class="casec-lvb watch" id="cc-lv-env">주의</span></div>
+        <div class="casec-title">&#128309; 방지시설 이상 위험</div>
+        <div class="casec-trig" id="cc-trig-env">--</div>
+        <div class="casec-foot"><span>2022 여수산단 VOC 초과배출</span><span>상세 &rsaquo;</span></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /rcol -->
+</div><!-- /wrap -->
+
+<!-- ═══ MODAL: 점수·수식 ═══ -->
+<div class="overlay" id="modal-score" onclick="if(event.target===this)closeModal('score')">
+  <div class="modal">
+    <div class="mhead"><div class="mtitle">&#128208; 예측 수식 &amp; 현재 점수</div><button class="mclose" onclick="closeModal('score')">&#10005;</button></div>
+    <div class="mbody">
+      <div class="msec"><div class="msec-t">단계 기준</div>
+        <table class="dtable">
+          <tr><th>단계</th><th>점수</th><th>의미</th><th>배경</th></tr>
+          <tr><td class="tok">안전</td><td>0~30%</td><td>정상 운영</td><td>위험 인자 없음</td></tr>
+          <tr><td style="color:var(--lv-caution)">조심</td><td>30~45%</td><td>모니터링 강화</td><td>경미한 인자 감지</td></tr>
+          <tr><td class="twn">주의</td><td>45~65%</td><td>점검 실시</td><td>복합 인자 감지</td></tr>
+          <tr><td class="tdg">경계</td><td>65%+</td><td>즉각 대응</td><td>임계 초과 복합</td></tr>
+        </table>
+      </div>
+      <div class="msec"><div class="msec-t">현재 점수</div>
+        <table class="dtable">
+          <tr><th>유형</th><th>점수</th><th>단계</th></tr>
+          <tr><td>화공&#183;설비</td><td id="sc-chem">--</td><td id="sl-chem">--</td></tr>
+          <tr><td>산업안전</td><td id="sc-fall">--</td><td id="sl-fall">--</td></tr>
+          <tr><td>환경&#183;설비</td><td id="sc-env">--</td><td id="sl-env">--</td></tr>
+          <tr><td><strong>종합</strong></td><td id="sc-total">--</td><td id="sl-total">--</td></tr>
+        </table>
+      </div>
+      <div class="msec"><div class="msec-t">사용 데이터 (날씨 기반 모델)</div>
+        <div style="font-size:11px;color:var(--txd);background:var(--sur2);border:1px solid var(--bdr);padding:10px;line-height:1.9;">
+          &#10004; 기온, 풍속, 습도, 강수량 — 기상청 단기예보<br>
+          &#10004; SO&#x00B2;, PM&#x2082;.&#x2085;, NO&#x00B2; — 에어코리아<br>
+          &#10004; 기온편차 &#916;T&#x2082;&#x2084;h — 단기예보 시계열 계산<br>
+          &#10007; 사고이력DB, 화학물질DB 등 — <span style="color:var(--lv-watch)">제외 (날씨 기반 모델로 충분)</span>
+        </div>
+      </div>
+      <div class="msec"><div class="msec-t">&#9312; 화공&#183;설비 수식</div>
+        <div class="formula"><div class="ft">P = sigmoid(z) · z =</div>
+          <span class="fcoef">2.8</span>&middot;<span class="fvar">W_low</span> + <span class="fcoef">1.9</span>&middot;<span class="fvar">&#916;T&#x2082;&#x2084;h</span> + <span class="fcoef">2.3</span>&middot;<span class="fvar">(H&#215;S)</span> - 1.2
+        </div>
+      </div>
+      <div class="msec"><div class="msec-t">&#9313; 산업안전 수식</div>
+        <div class="formula"><div class="ft">P = sigmoid(z) · z =</div>
+          <span class="fcoef">1.6</span>&middot;<span class="fvar">T_norm</span> + <span class="fcoef">0.8</span>&middot;<span class="fvar">W_max</span> + <span class="fcoef">1.2</span>&middot;<span class="fvar">R_rain</span> - 1.5
+        </div>
+      </div>
+      <div class="msec"><div class="msec-t">&#9314; 환경&#183;설비 수식</div>
+        <div class="formula"><div class="ft">P = sigmoid(z) · z =</div>
+          <span class="fcoef">2.1</span>&middot;<span class="fvar">PM_load</span> + <span class="fcoef">0.9</span>&middot;<span class="fvar">T_ext</span> + <span class="fcoef">1.4</span>&middot;<span class="fvar">Inv</span> - 1.8
+        </div>
+      </div>
+      <div class="msec"><div class="msec-t">현재 입력값</div>
+        <table class="dtable">
+          <tr><th>변수</th><th>현재값</th><th>임계</th><th>상태</th></tr>
+          <tr><td>&#916;T&#x2082;&#x2084;h</td><td id="fv-dt">--</td><td>&lt;5&#176;C</td><td id="fs-dt">--</td></tr>
+          <tr><td>풍속</td><td id="fv-w">--</td><td>&lt;3m/s</td><td id="fs-w">--</td></tr>
+          <tr><td>H&#215;S 복합</td><td id="fv-hs">--</td><td>&lt;0.70</td><td id="fs-hs">--</td></tr>
+          <tr><td>PM&#x2082;.&#x2085;</td><td id="fv-pm">--</td><td>&lt;50&#956;g/m&#x00B3;</td><td id="fs-pm">--</td></tr>
+          <tr><td>기온</td><td id="fv-t">--</td><td>&lt;25&#176;C</td><td id="fs-t">--</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: 화공 사례 ═══ -->
+<div class="overlay" id="modal-m-chem" onclick="if(event.target===this)closeModal('m-chem')">
+  <div class="modal">
+    <div class="mhead"><div class="mtitle" style="color:var(--lv-alert)">&#128308; 화공&#183;설비 — 메커니즘 &amp; 사례</div><button class="mclose" onclick="closeModal('m-chem')">&#10005;</button></div>
+    <div class="mbody">
+      <div class="msec"><div class="msec-t">발현 메커니즘</div>
+        <div style="background:var(--sur2);border:1px solid var(--bdr);padding:10px;font-size:11px;line-height:2;">
+          풍속 &lt; 3m/s &rarr; 유증기 배관 주변 체류<br>
+          + &#916;T 급변 &rarr; 가스켓&#183;플랜지 미세 누출<br>
+          + 고온&#183;습도&#183;SO&#x00B2; 복합 &rarr; 부식 가속<br>
+          <strong style="color:var(--lv-alert)">&darr; LFL 도달 + 점화원 &rarr; 폭발</strong>
+        </div>
+      </div>
+      <div class="msec"><div class="msec-t">현재 트리거 상태</div>
+        <table class="dtable">
+          <tr><th>인자</th><th>현재값</th><th>임계</th><th>판정</th></tr>
+          <tr><td>저풍속</td><td id="m1-w">--</td><td>&lt;3.0m/s</td><td id="m1-ws">--</td></tr>
+          <tr><td>&#916;T&#x2082;&#x2084;h</td><td id="m1-dt">--</td><td>&lt;5.0&#176;C</td><td id="m1-dts">--</td></tr>
+          <tr><td>H&#215;S</td><td id="m1-hs">--</td><td>&lt;0.70</td><td id="m1-hss">--</td></tr>
+        </table>
+      </div>
+      <div class="msec"><div class="msec-t">실제 사례</div>
+        <div class="rcase"><div class="rcase-title">&#127470;&#127472; 2019. 여수 NCC 유증기 화재</div><span class="rl rl-d">화재</span><span class="rl rl-w">풍속 2.0m/s</span>플랜지 누출 &rarr; 유증기 체류 &rarr; 화재. 부상 3명.</div>
+        <div class="rcase"><div class="rcase-title">&#127470;&#127472; 2012. 여수 세계박람회 직전 폭발</div><span class="rl rl-d">폭발</span><span class="rl rl-w">&#916;T 8&#176;C</span>야간&#8594;주간 급등 &rarr; 폭발. 사망 1명.</div>
+        <div class="rcase"><div class="rcase-title">&#127482;&#127480; 2005. 텍사스 BP 정유공장</div><span class="rl rl-d">대형폭발</span>저풍속 유증기 체류 &rarr; 폭발. 사망 15명.</div>
+      </div>
+      <div class="msec"><div class="msec-t">즉시 조치</div>
+        <div style="font-size:11px;line-height:2;color:var(--tx)">&#9312; 플랜지 부위 가스 농도 수동 측정<br>&#9313; 환기팬 최대 출력<br>&#9314; 용접&#183;불꽃 작업 즉시 중단<br>&#9315; 비상 연락 체계 준비</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: 추락 사례 ═══ -->
+<div class="overlay" id="modal-m-fall" onclick="if(event.target===this)closeModal('m-fall')">
+  <div class="modal">
+    <div class="mhead"><div class="mtitle" style="color:var(--lv-watch)">&#128993; 산업안전 — 추락&#183;낙상 사례</div><button class="mclose" onclick="closeModal('m-fall')">&#10005;</button></div>
+    <div class="mbody">
+      <div class="msec"><div class="msec-t">현재 트리거</div>
+        <table class="dtable">
+          <tr><th>인자</th><th>현재값</th><th>임계</th><th>판정</th></tr>
+          <tr><td>기온</td><td id="m2-t">--</td><td>&lt;25&#176;C</td><td id="m2-ts">--</td></tr>
+          <tr><td>강수량</td><td id="m2-r">--</td><td>&lt;5mm/h</td><td id="m2-rs">--</td></tr>
+        </table>
+      </div>
+      <div class="msec"><div class="msec-t">실제 사례</div>
+        <div class="rcase"><div class="rcase-title">&#127470;&#127472; 2021. 여수 탑상 작업 중 추락 사망</div><span class="rl rl-w">추락</span><span class="rl rl-w">기온 31&#176;C</span>열피로 &rarr; 비계 발판 이탈 &rarr; 추락 사망.</div>
+        <div class="rcase"><div class="rcase-title">산업안전보건공단 통계 (2020)</div><span class="rl rl-w">통계</span>7~8월 고온기 추락 사고 비고온기 대비 <strong style="color:var(--lv-watch)">34% 증가.</strong></div>
+      </div>
+      <div class="msec"><div class="msec-t">즉시 조치</div>
+        <div style="font-size:11px;line-height:2;color:var(--tx)">&#9312; 안전대 체결 재확인<br>&#9313; 30분마다 수분 보충 강제<br>&#9314; 2인 1조 작업 원칙</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: RTO 사례 ═══ -->
+<div class="overlay" id="modal-m-env" onclick="if(event.target===this)closeModal('m-env')">
+  <div class="modal">
+    <div class="mhead"><div class="mtitle" style="color:var(--lv-caution)">&#128309; 환경&#183;설비 — RTO 사례</div><button class="mclose" onclick="closeModal('m-env')">&#10005;</button></div>
+    <div class="mbody">
+      <div class="msec"><div class="msec-t">현재 트리거</div>
+        <table class="dtable">
+          <tr><th>인자</th><th>현재값</th><th>임계</th><th>판정</th></tr>
+          <tr><td>PM&#x2082;.&#x2085;</td><td id="m3-pm">--</td><td>&lt;50&#956;g/m&#x00B3;</td><td id="m3-pms">--</td></tr>
+          <tr><td>기온</td><td id="m3-t">--</td><td>&lt;25&#176;C</td><td id="m3-ts">--</td></tr>
+        </table>
+      </div>
+      <div class="msec"><div class="msec-t">실제 사례</div>
+        <div class="rcase"><div class="rcase-title">&#127470;&#127472; 2022. 여수 산단 VOC 초과 배출</div><span class="rl" style="background:rgba(56,189,248,.1);color:var(--lv-caution);border:1px solid rgba(56,189,248,.3)">환경위반</span>고농도 황사 &rarr; RTO 폐색 &rarr; 초과배출. 과징금 2억.</div>
+      </div>
+      <div class="msec"><div class="msec-t">즉시 조치</div>
+        <div style="font-size:11px;line-height:2;color:var(--tx)">&#9312; RTO 필터 차압 확인<br>&#9313; 배출구 역압 모니터링<br>&#9314; 예비 필터 교체 준비</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
-// ════════════════════════════════════════
-// CONFIG — Open-Meteo (CORS 허용, 실시간 무료 API)
-// ════════════════════════════════════════
-const OPEN_METEO = 'https://api.open-meteo.com/v1/forecast';
+'use strict';
 
-// 지역별 실제 위경도 좌표
-const REGION_COORDS = {
-  '여수석화산단': { lat: 34.7395, lon: 127.7383, label: '전남 여수시 율촌면' },
-  '여수시내':     { lat: 34.7604, lon: 127.6622, label: '전남 여수시 중앙동' },
-  '광양제철':     { lat: 34.9218, lon: 127.6991, label: '전남 광양시 금호동' },
-  '순천':         { lat: 34.9506, lon: 127.4874, label: '전남 순천시' },
-  '서울':         { lat: 37.5665, lon: 126.9780, label: '서울특별시' },
-  '부산':         { lat: 35.1796, lon: 129.0756, label: '부산광역시' },
-  '대구':         { lat: 35.8714, lon: 128.6014, label: '대구광역시' },
-  '인천':         { lat: 37.4563, lon: 126.7052, label: '인천광역시' },
-  '광주':         { lat: 35.1595, lon: 126.8526, label: '광주광역시' },
-  '대전':         { lat: 36.3504, lon: 127.3845, label: '대전광역시' },
-  '울산':         { lat: 35.5384, lon: 129.3114, label: '울산광역시' },
-  '수원':         { lat: 37.2636, lon: 127.0286, label: '경기 수원시' },
-  '청주':         { lat: 36.6424, lon: 127.4890, label: '충북 청주시' },
-  '전주':         { lat: 35.8242, lon: 127.1480, label: '전북 전주시' }
+// ══════════════════════════════════════════
+//  전역 데이터
+// ══════════════════════════════════════════
+const D = {
+  temp:null, hum:null, wind:null, rain:null,
+  so2:null,  no2:null, pm25:null, dt24:null,
+  tempHist: [],
+  todayFc:  [],   // 오늘 0~23시 [{hour,temp,wind,rain,hum,sky,pty}]
+  loaded:   false
 };
 
-// ════════════════════════════════════════
-// 방지시설 정의 (케이스 포함)
-// ════════════════════════════════════════
-const FACILITIES = [
-  {
-    id:'bagfilter', name:'백필터', fullName:'백필터 (Bag Filter)', icon:'🏭',
-    desc:'여과포를 이용한 건식 집진 방식. 온·습도·강풍에 민감',
-    tempThresh:{low:5,high:40}, humThresh:{low:30,high:80}, windThresh:10, rainThresh:5,
-    cases:[
-      {
-        id:'BF-C1', param:'습도', condition:'고습 (RH > 80%)', trigger: w => w.REH > 80,
-        severity: w => w.REH > 90 ? '위험' : '주의',
-        impact:'여과포 수분 흡착 → 분진 고착 → 차압 급상승 → 여과 효율 30~50% 저하',
-        mechanism:'수분이 여과포 섬유에 흡착되어 케이크층이 굳고, 자동 탈진(Pulse Jet) 효과 감소. 차압이 설계값(1,500~2,500 Pa) 이상 상승.',
-        threshold:'RH 80% 초과 시 경계 / 90% 초과 시 즉시 대응',
-        actions:[
-          {step:'즉시',title:'탈진 주기 단축',desc:'자동 탈진 간격을 기본값의 50%로 단축. 수동 탈진 병행 실시'},
-          {step:'즉시',title:'입구 온도 상승',desc:'버너/히터로 가스 입구 온도를 이슬점 +20°C 이상으로 유지'},
-          {step:'점검',title:'차압계 확인',desc:'설계 차압의 120% 초과 시 즉시 해당 격실 격리 후 점검'},
-          {step:'기록',title:'TMS 데이터 확인',desc:'배출구 먼지 농도 TMS 수치 실시간 확인, 기준치 80% 이상 시 보고'}
-        ],
-        ref:'배출시설 설치 허가 조건 및 운영 기준 (환경부고시, 2021)'
-      },
-      {
-        id:'BF-C2', param:'습도', condition:'저습 (RH < 30%)', trigger: w => w.REH < 30,
-        severity: w => w.REH < 20 ? '위험' : '경계',
-        impact:'정전기 발생 → 여과포 대전 → 분진 재비산 → 집진 효율 저하',
-        mechanism:'건조 조건에서 분진 입자가 (+)전하 대전, 여과포 표면도 대전되어 쿨롱 반발력으로 포집 불량 발생.',
-        threshold:'RH 30% 미만 시 경계 / 20% 미만 시 위험',
-        actions:[
-          {step:'확인',title:'접지 상태 점검',desc:'여과포 하우징 접지저항 10Ω 이하 확인'},
-          {step:'조정',title:'분무 가습 검토',desc:'입구 가스에 스팀 또는 미세 수분 분무 (이슬점 이하 유지 주의)'},
-          {step:'관찰',title:'분진 재비산 관찰',desc:'출구 덕트 부근 시각적 누출 확인 후 TMS 수치 비교'}
-        ],
-        ref:'KOSHA GUIDE E-180-2019 (정전기 장해 방지)'
-      },
-      {
-        id:'BF-C3', param:'온도', condition:'고온 (> 40°C)', trigger: w => w.TMP > 40,
-        severity: w => w.TMP > 50 ? '위험' : '주의',
-        impact:'여과포 열화 → 섬유 강도 저하 → 파공 발생 → 누설 배출',
-        mechanism:'폴리에스터(PET) 여과포의 내열 한계 130~160°C이나, 외기 고온 + 배가스 복합 시 실제 여과포 온도 상승폭 확대.',
-        threshold:'외기 40°C 초과 시 배가스 냉각 계통 점검 필요',
-        actions:[
-          {step:'즉시',title:'냉각장치 가동',desc:'하우징 냉각팬 최대 가동, 냉각수 순환 확인'},
-          {step:'점검',title:'여과포 온도 확인',desc:'출구 온도계 판독, 설계 온도 +30°C 이상 시 운전 정지 검토'}
-        ],
-        ref:'여과집진시설 설치·운영 지침 (국립환경과학원)'
-      },
-      {
-        id:'BF-C4', param:'풍속', condition:'강풍 (> 10 m/s)', trigger: w => w.WSD > 10,
-        severity: w => w.WSD > 14 ? '위험' : '경계',
-        impact:'굴뚝 배출구 역압 → 차압 불균형 → 탈진 효율 저하',
-        mechanism:'강풍 시 굴뚝 출구 동압 증가로 시스템 차압 변동. Pulse Jet 탈진 압력 설정값 이탈 가능.',
-        threshold:'10 m/s 초과 시 경계 / 14 m/s 초과 시 위험 (기상청 강풍주의보 기준)',
-        actions:[
-          {step:'확인',title:'탈진 압축공기 압력',desc:'탈진용 공기압 0.3~0.5 MPa 범위 유지 확인'},
-          {step:'점검',title:'덕트 연결부 밀봉',desc:'플렉시블 조인트 및 덕트 이음부 누설 육안 점검'}
-        ],
-        ref:'대기오염방지시설 운영 매뉴얼 (환경부, 2022)'
-      },
-      {
-        id:'BF-C5', param:'온도', condition:'저온/강수 복합', trigger: w => w.TMP < 5 || w.PCP > 5,
-        severity: w => (w.TMP < 0 || w.PCP > 15) ? '위험' : '경계',
-        impact:'결로 → 분진 고착 + 부식 → 하우징 손상',
-        mechanism:'입구 가스 이슬점 이하로 가스 온도 저하 시 수분 응결. 산성 분진과 결합하여 부식성 슬러지 형성.',
-        threshold:'외기온 5°C 이하 + 강수 5mm 이상 복합 시 대응',
-        actions:[
-          {step:'즉시',title:'입구 온도 관리',desc:'이슬점 온도 + 20°C 이상으로 가스 입구 온도 유지 (보조 히터 가동)'},
-          {step:'점검',title:'배수구 청소',desc:'하우징 하부 호퍼 및 배수구 막힘 여부 확인'}
-        ],
-        ref:'한국환경공단 방지시설 운영 실무 가이드 (2023)'
-      }
-    ]
-  },
-  {
-    id:'scrubber', name:'습식세정탑', fullName:'습식세정탑 (Wet Scrubber)', icon:'🌊',
-    desc:'세정액으로 오염물질 흡수·제거. 온도·동결·수질 관리 필수',
-    tempThresh:{low:3,high:45}, humThresh:{low:20,high:90}, windThresh:8, rainThresh:10,
-    cases:[
-      {
-        id:'WS-C1', param:'온도', condition:'동결 위험 (< 3°C)', trigger: w => w.TMP < 3,
-        severity: w => w.TMP < 0 ? '위험' : '주의',
-        impact:'세정액 동결 → 펌프/배관 파손 → 운전 정지 → 무방지 상태 배출',
-        mechanism:'순환수 유속이 낮은 구간(Mist Eliminator 주변, 스프레이 노즐 헤더)에서 0°C 이하 시 동결. 배관 파열 및 펌프 임펠러 손상.',
-        threshold:'외기 3°C 미만 시 동결 위험 시작 / 0°C 미만 시 즉시 대응',
-        actions:[
-          {step:'즉시',title:'히팅 라인 가동',desc:'순환배관 트레이싱 히터 전원 확인 및 가동, 탱크 히터 설정 온도 15°C 확인'},
-          {step:'즉시',title:'순환 유량 증가',desc:'순환펌프 유량을 설계치 120%로 증가, 정체 구간 퍼지'},
-          {step:'점검',title:'동결 방지 농도',desc:'에틸렌글리콜 또는 염화칼슘 농도 확인 (최저 운전 온도 –5°C 기준 30% w/w)'},
-          {step:'준비',title:'비상 배수 절차',desc:'장기 동결 예보 시 24시간 이상 운전 중단 예상되면 시스템 완전 배수 실시'}
-        ],
-        ref:'습식 세정 집진 장치 운용 지침 (국립환경과학원, 2021)'
-      },
-      {
-        id:'WS-C2', param:'온도', condition:'고온 건기 (> 38°C)', trigger: w => w.TMP > 38 && w.REH < 40,
-        severity: w => w.TMP > 45 ? '위험' : '경계',
-        impact:'세정수 증발 → 농축 → 스케일·막힘 → 처리효율 급감',
-        mechanism:'고온 건조 기후 시 세정탑 수면 증발율 증가, TDS 상승으로 노즐 막힘 및 충전재 스케일 생성. pH 이탈.',
-        threshold:'기온 38°C, RH 40% 미만 복합 시 증발율 3배 이상 증가',
-        actions:[
-          {step:'즉시',title:'보충수 공급 증가',desc:'보충수(Make-up Water) 공급량 50% 증가, 수위계 30분 간격 확인'},
-          {step:'점검',title:'수질 분석',desc:'TDS 2,000 mg/L 이하, pH 6.5~7.5 유지 확인. 초과 시 블로우다운 실시'},
-          {step:'세정',title:'노즐 막힘 점검',desc:'스프레이 패턴 육안 확인, 막힘 노즐 교체 (1주 1회 → 일일 점검으로 주기 단축)'}
-        ],
-        ref:'습식세정집진시설 운전 및 유지관리 (환경부, 2020)'
-      },
-      {
-        id:'WS-C3', param:'풍속', condition:'강풍 + 백연 (> 8 m/s)', trigger: w => w.WSD > 8,
-        severity: w => w.WSD > 12 ? '위험' : '경계',
-        impact:'세정 액적 비산 → 굴뚝 주변 오염 + 백연(가시연기) 증가 → 민원 발생',
-        mechanism:'Mist Eliminator 효율이 강풍 조건에서 저하, 미세 액적이 배출가스와 함께 외부 배출. 외기온 저하 복합 시 흰 연기(수증기) 시인성 증가.',
-        threshold:'8 m/s 초과 시 Mist 비산 / 풍향이 주거지구 방향 시 민원 대응 필요',
-        actions:[
-          {step:'즉시',title:'액기비 조정',desc:'세정수 분사량을 설계 L/G비의 80%로 감소, 배출가스 재가열 검토'},
-          {step:'모니터링',title:'굴뚝 하부 관찰',desc:'드리프트(Drift) 비산 여부 현장 확인, 주변 오염물 발생 시 보고'}
-        ],
-        ref:'KOSHA GUIDE W-11-2022 (습식 집진장치 안전작업 지침)'
-      },
-      {
-        id:'WS-C4', param:'강수', condition:'강수 (> 10 mm)', trigger: w => w.PCP > 10,
-        severity: w => w.PCP > 30 ? '위험' : '경계',
-        impact:'빗물 유입 → 세정액 희석 → pH/농도 이탈 → 처리효율 저하',
-        mechanism:'개방형 또는 반밀폐 설비에서 강우 직접 유입, 순환탱크 수위 급상승 및 세정액 농도 희석.',
-        threshold:'30mm/h 이상 집중 호우 시 오버플로우 위험',
-        actions:[
-          {step:'즉시',title:'배수밸브 개방',desc:'탱크 긴급 배수 밸브 열어 적정 수위 유지 (설계 수위 ±10%)'},
-          {step:'점검',title:'pH 연속 측정',desc:'pH 6.5 이하 산성화 또는 8.5 이상 알칼리화 시 약품 주입량 조정'}
-        ],
-        ref:'대기오염방지시설 설치 및 운영 규정 (환경부)'
-      }
-    ]
-  },
-  {
-    id:'esp', name:'전기집진기', fullName:'전기집진기 (ESP)', icon:'⚡',
-    desc:'고전압 코로나 방전으로 분진 포집. 절연·전기 특성에 민감',
-    tempThresh:{low:0,high:50}, humThresh:{low:30,high:80}, windThresh:12, rainThresh:3,
-    cases:[
-      {
-        id:'ESP-C1', param:'습도', condition:'고습 + 강수 복합', trigger: w => w.REH > 80 || w.PCP > 3,
-        severity: w => (w.REH > 90 || w.PCP > 10) ? '위험' : '주의',
-        impact:'절연체 표면 수분 → 절연 저항 저하 → 방전 손실 → 집진 효율 급감 (20~40% 저하)',
-        mechanism:'애자(Insulator) 표면 흡습으로 표면 저항 감소. 인가 전압 대비 누설전류 증가로 코로나 방전 약화. 고습 분진의 비저항 변화.',
-        threshold:'RH 85% 초과 또는 강수 3mm 이상 시 절연 감시 강화',
-        actions:[
-          {step:'즉시',title:'인가전압 점진 감소',desc:'고압 전원 출력을 10~15% 감소 (스파크 방지), 전류 설정값 재조정'},
-          {step:'즉시',title:'애자 히터 확인',desc:'애자 박스 히터 동작 여부 확인. 이슬점 이상 온도 유지 필수 (히터 설정 50~80°C)'},
-          {step:'점검',title:'절연저항 측정',desc:'강수 후 1,000V DC 기준 1MΩ 이상 확인. 미달 시 건조 후 재측정'},
-          {step:'관찰',title:'방전전류 모니터링',desc:'초당 스파크 발생 횟수 5회 이하 유지. 초과 시 전압 추가 감소'}
-        ],
-        ref:'전기집진기 설치·운영 기술 지침 (한국환경공단, 2023)'
-      },
-      {
-        id:'ESP-C2', param:'습도', condition:'저습 (RH < 30%)', trigger: w => w.REH < 30,
-        severity: w => w.REH < 20 ? '위험' : '경계',
-        impact:'분진 비저항 급상승 → 역전리(Back Corona) 발생 → 포집 분진 재비산',
-        mechanism:'건조 조건에서 고비저항 분진(>10^11 Ω·cm)은 집진극에 쌓인 채 방전되어 역방향 이온이 발생, 포집된 분진이 탈리.',
-        threshold:'RH 30% 미만 시 역전리 발생 위험 증가',
-        actions:[
-          {step:'조정',title:'인가전압 간헐 제어',desc:'펄스 간헐 전원 공급 방식으로 전환 (Intermittent Energization)'},
-          {step:'점검',title:'분진 타격 강도 조정',desc:'래핑(Rapping) 강도/주기 증가로 포집 분진 신속 제거'}
-        ],
-        ref:'ESP 운전 최적화 가이드 (IEST Standard CC018.3)'
-      },
-      {
-        id:'ESP-C3', param:'온도', condition:'저온 (< 5°C)', trigger: w => w.TMP < 5,
-        severity: w => w.TMP < 0 ? '위험' : '경계',
-        impact:'배가스 결로 → 집진극판 부식 + 산성 수막 형성 → 절연 파괴',
-        mechanism:'황산화물 함유 배가스가 산노점(130~150°C) 이하로 냉각 시 H₂SO₄ 응결. 극판 부식 및 전기적 단락.',
-        threshold:'외기온 5°C 이하 시 예열 계통 작동 확인 필수',
-        actions:[
-          {step:'즉시',title:'예열 계통 작동',desc:'입구 가스 온도 산노점 이상 유지. 전기 히터 또는 스팀 코일 작동 확인'},
-          {step:'점검',title:'산성 부식 점검',desc:'점검 구 또는 내시경으로 극판 부식 여부 확인'}
-        ],
-        ref:'NFPA 654-2020 (분진 폭발 위험 제어 기준)'
-      },
-      {
-        id:'ESP-C4', param:'풍속', condition:'강풍 (> 12 m/s)', trigger: w => w.WSD > 12,
-        severity: w => w.WSD > 18 ? '위험' : '경계',
-        impact:'포집된 분진 재비산 → 출구 농도 순간 상승 → TMS 기준 초과 가능성',
-        mechanism:'외부 강풍에 의한 굴뚝 역압 발생. 호퍼 내 포집 분진이 기류 역류 시 재부유.',
-        threshold:'12 m/s 초과 시 출구 농도 모니터링 강화',
-        actions:[
-          {step:'즉시',title:'래핑 주기 단축',desc:'극판 래핑 주기를 1/2로 단축, 호퍼 내 분진 신속 배출'},
-          {step:'확인',title:'TMS 실시간 확인',desc:'배출구 먼지 농도 TMS 30분 평균값 허용기준 80% 도달 시 즉시 보고'}
-        ],
-        ref:'대기오염공정시험기준 (ES 01130.c, 굴뚝 배출가스 연속측정)'
-      }
-    ]
-  },
-  {
-    id:'rto', name:'RTO 축열연소설비', fullName:'축열연소설비 (RTO/RCO)', icon:'🔥',
-    desc:'고온 산화 연소로 VOC 처리. 연소 안정성·열교환 효율에 민감',
-    tempThresh:{low:-5,high:38}, humThresh:{low:20,high:85}, windThresh:15, rainThresh:2,
-    cases:[
-      {
-        id:'RTO-C1', param:'풍속', condition:'강풍 (> 15 m/s)', trigger: w => w.WSD > 15,
-        severity: w => w.WSD > 20 ? '위험' : '주의',
-        impact:'굴뚝 역압 → 연소실 압력 상승 → 버너 화염 불안정 → 미연소 VOC 배출',
-        mechanism:'강풍 시 굴뚝 배압 증가로 연소실 내압 변동. 자동 댐퍼 응답 지연 시 역화(Flashback) 또는 화염 이탈 가능.',
-        threshold:'15 m/s 초과 시 위험 / 기상청 강풍경보(20 m/s) 시 즉시 대응',
-        actions:[
-          {step:'즉시',title:'버너 압력 조정',desc:'버너 연료 공급압을 10% 증가, 공연비 재조정 (Lambda 1.1~1.2 유지)'},
-          {step:'즉시',title:'댐퍼 제어 확인',desc:'자동 댐퍼 응답속도 확인, 수동 개도 조정 후 차압 안정 확인'},
-          {step:'준비',title:'비상 정지 절차 준비',desc:'20 m/s 이상 지속 시 안전 정지 절차 대기, 비상 VOC 우회 배관 열림 여부 확인'},
-          {step:'기록',title:'VOC 배출 농도 확인',desc:'TMS 출구 VOC 농도 실시간 확인. 기준치 80% 도달 시 즉시 보고'}
-        ],
-        ref:'VOC 배출억제 방지시설 기술 지침 (환경부, 2022)'
-      },
-      {
-        id:'RTO-C2', param:'온도', condition:'저온 냉간시동 (< 5°C)', trigger: w => w.TMP < 5,
-        severity: w => w.TMP < -5 ? '위험' : '경계',
-        impact:'냉간 열교환체 → 예열 시간 과다 → 시동 실패 → 처리 공백 발생',
-        mechanism:'축열재(세라믹) 온도가 낮을 경우 설계 연소 온도(800~900°C) 도달 시간 길어짐. 외기 –5°C 이하 시 기기 자체 동결 위험(배수라인).',
-        threshold:'외기 5°C 이하 시 예열 시간 +30분 / –5°C 이하 시 배수 확인',
-        actions:[
-          {step:'사전',title:'예열 시간 연장',desc:'냉간 시동 예열 시간을 기본값 대비 +30분 설정. 버너 최소 가동 전력 50%로 시작'},
-          {step:'점검',title:'배수 라인 동결 확인',desc:'세정 배수 및 응결수 배출라인 히팅 테이프 동작 확인'},
-          {step:'준비',title:'보조 연료 예비',desc:'기동용 보조 연료(LNG/LPG) 공급 밸브 개방 확인 및 압력 게이지 점검'}
-        ],
-        ref:'축열식연소설비(RTO) 설치·운영 매뉴얼 (한국환경공단)'
-      },
-      {
-        id:'RTO-C3', param:'강수', condition:'강수 + 열충격', trigger: w => w.PCP > 2,
-        severity: w => w.PCP > 20 ? '위험' : '경계',
-        impact:'급냉→열충격 → 세라믹 축열재 균열 → 열교환 효율 저하 + 압력 손실 증가',
-        mechanism:'고온 운전 중(800°C+) 외부 강우가 하우징 또는 굴뚝 상단 유입 시 세라믹 축열재 급냉. 열충격(Thermal Shock)으로 균열 발생.',
-        threshold:'운전 중 강수 2mm 이상 시 외함 누수 점검 필수',
-        actions:[
-          {step:'즉시',title:'외함 누수 점검',desc:'상부 맨홀, 굴뚝 연결부 누수 여부 확인. 빗물 유입 경로 즉시 차단'},
-          {step:'점검',title:'차압 모니터링',desc:'축열재 차압 설계값의 130% 이상 시 균열 의심, 냉각 후 내부 점검 계획 수립'},
-          {step:'기록',title:'열전달 효율 계산',desc:'운전 전후 온도 데이터로 열회수율 재계산 (설계 열회수율 95% ±5% 이내 확인)'}
-        ],
-        ref:'세라믹 축열재 유지보수 기술기준 (ASHRAE Guideline 12)'
-      },
-      {
-        id:'RTO-C4', param:'습도', condition:'고습 (RH > 80%)', trigger: w => w.REH > 80,
-        severity: w => w.REH > 90 ? '위험' : '경계',
-        impact:'수증기 포함 배가스 → 연소 효율 저하 → 미연소 성분 증가',
-        mechanism:'수증기 함량 증가로 연소 반응 산소 분압 저하. 또한 응결수가 버너 전극부 오염 유발.',
-        threshold:'RH 80% 초과 시 연소 온도 +20°C 여유값 추가 설정 권고',
-        actions:[
-          {step:'조정',title:'연소 온도 상향',desc:'운전 온도 설정값을 설계치 대비 +20°C 상향 조정 (최소 800°C 이상 유지)'},
-          {step:'점검',title:'버너 전극 청소',desc:'수분으로 인한 버너 점화 전극부 탄소 오염 여부 확인 및 청소'}
-        ],
-        ref:'연소시설 환경관리 가이드 (국립환경과학원, 2023)'
-      }
-    ]
-  }
-];
+// ══════════════════════════════════════════
+//  Open-Meteo 폴백 (Actions 파일 없을 때)
+// ══════════════════════════════════════════
+async function fetchOpenMeteo() {
+  const [wr, ar] = await Promise.allSettled([
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=34.7604&longitude=127.6622&current=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation&hourly=temperature_2m,wind_speed_10m,precipitation,relative_humidity_2m&timezone=Asia%2FSeoul&forecast_days=7`),
+    fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=34.7604&longitude=127.6622&current=pm2_5,nitrogen_dioxide,sulphur_dioxide&timezone=Asia%2FSeoul`)
+  ]);
 
-// ════════════════════════════════════════
-// 상태
-// ════════════════════════════════════════
-let weatherData = null;
-let lastWeatherData = null; // 최신 데이터 캐시
-let isRealtime = false;
-let currentRegion = '여수석화산단';
-let lastUpdateTime = null;
-
-// ════════════════════════════════════════
-// 시계
-// ════════════════════════════════════════
-setInterval(() => {
-  document.getElementById('clock').textContent =
-    new Date().toLocaleTimeString('ko-KR', { hour12: false });
-}, 1000);
-document.getElementById('clock').textContent =
-  new Date().toLocaleTimeString('ko-KR', { hour12: false });
-
-function degToDir(deg) {
-  const d = ['북','북북동','북동','동북동','동','동남동','남동','남남동','남','남남서','남서','서남서','서','서북서','북서','북북서'];
-  return d[Math.round(deg / 22.5) % 16];
-}
-
-// ════════════════════════════════════════
-// Open-Meteo 실시간 API (CORS 허용)
-// ════════════════════════════════════════
-// 타임아웃 fetch 헬퍼 (AbortController 미지원 브라우저 대비)
-function fetchWithTimeout(url, ms = 5000) {
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms);
-    return fetch(url, { signal: ctrl.signal })
-      .finally(() => clearTimeout(timer));
-  } catch(e) {
-    return fetch(url);
-  }
-}
-
-// API 소스 1: Open-Meteo (무료, CORS 허용, GitHub Pages에서 정상 동작)
-async function fetchOpenMeteo(coord) {
-  const p = new URLSearchParams({
-    latitude: coord.lat, longitude: coord.lon,
-    current: 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,surface_pressure,cloud_cover',
-    hourly:  'temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation,surface_pressure,weather_code',
-    wind_speed_unit: 'ms',
-    timezone: 'Asia/Seoul',
-    forecast_days: 1
-  });
-
-  // 직접 호출 먼저
-  const directUrl = `https://api.open-meteo.com/v1/forecast?${p}`;
-  let res;
-  try {
-    res = await fetchWithTimeout(directUrl, 8000);
-  } catch(e) {
-    // 직접 실패 시 CORS 프록시 경유
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(directUrl)}`;
-    res = await fetchWithTimeout(proxyUrl, 8000);
-  }
-  if (!res.ok) throw new Error('Open-Meteo HTTP ' + res.status);
-  const j = await res.json();
-  if (!j.current) throw new Error('Open-Meteo 데이터 없음');
-  return { source: 'Open-Meteo', data: j };
-}
-
-// API 소스 2: wttr.in (CORS 허용 백업)
-async function fetchWttr(coord) {
-  const url = `https://wttr.in/${coord.lat},${coord.lon}?format=j1`;
-  const res = await fetchWithTimeout(url, 8000);
-  if (!res.ok) throw new Error('wttr.in HTTP ' + res.status);
-  const j = await res.json();
-  const cur = j.current_condition?.[0];
-  if (!cur) throw new Error('wttr 데이터 없음');
-  return { source: 'wttr.in', data: j };
-}
-
-// 파서: Open-Meteo → 공통 w 형식
-function parseOpenMeteo(json) {
-  const c = json.current, h = json.hourly;
-  const now = new Date();
-  const w = {
-    TMP:  Math.round(c.temperature_2m * 10) / 10,
-    ATMP: Math.round(c.apparent_temperature * 10) / 10,
-    REH:  c.relative_humidity_2m,
-    WSD:  Math.round(c.wind_speed_10m * 10) / 10,
-    WSG:  Math.round((c.wind_gusts_10m||0) * 10) / 10,
-    PCP:  c.precipitation || 0,
-    PRS:  Math.round(c.surface_pressure || 1013),
-    VEC_DEG: c.wind_direction_10m || 0,
-    VEC_STR: degToDir(c.wind_direction_10m || 0),
-    CLOUD: c.cloud_cover || 0,
-    WX_CODE: c.weather_code || 0
-  };
-  const fcst = {};
-  if (h?.time) {
-    for (let i = 0; i < h.time.length; i++) {
-      if (new Date(h.time[i]) > now) {
-        fcst[h.time[i]] = {
-          TMP: Math.round((h.temperature_2m[i]||20)*10)/10,
-          REH: h.relative_humidity_2m[i]||50,
-          WSD: Math.round((h.wind_speed_10m[i]||0)*10)/10,
-          PCP: h.precipitation[i]||0,
-          PRS: Math.round(h.surface_pressure[i]||1013),
-          WX_CODE: h.weather_code[i]||0
-        };
-      }
+  if (wr.status==='fulfilled' && wr.value.ok) {
+    const j = await wr.value.json();
+    const c = j.current;
+    const t = c.temperature_2m;
+    if (isValidTemp(t)) {
+      D.temp = t;
+      D.hum  = c.relative_humidity_2m;
+      D.wind = +(c.wind_speed_10m / 3.6).toFixed(1);
+      D.rain = c.precipitation;
     }
+
+    // 오늘 전체 시간별 예보 (0~23시)
+    const today = new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+    D.todayFc = [];
+    j.hourly.time.forEach((t2,i) => {
+      if (!t2.startsWith(today)) return;
+      const h = parseInt(t2.slice(11,13));
+      const tmp = j.hourly.temperature_2m[i];
+      if (!isValidTemp(tmp)) return;
+      D.todayFc.push({
+        hour: h,
+        temp: tmp,
+        wind: +(j.hourly.wind_speed_10m[i]/3.6).toFixed(1),
+        rain: j.hourly.precipitation[i] || 0,
+        hum:  j.hourly.relative_humidity_2m[i] || 60,
+        sky: '1', pty: '0'
+      });
+    });
+    setSrc('rt','fallback','Open-Meteo (대체)');
+    setSrc('fc','fallback','Open-Meteo (대체)');
   }
-  return { current: w, forecast: fcst };
+
+  if (ar.status==='fulfilled' && ar.value.ok) {
+    const j = await ar.value.json();
+    const c = j.current;
+    if (!isNaN(c.pm2_5) && c.pm2_5>=0 && c.pm2_5<1000) {
+      D.pm25 = c.pm2_5;
+      D.no2  = +(c.nitrogen_dioxide/1000).toFixed(4);
+      D.so2  = +(c.sulphur_dioxide/1000).toFixed(4);
+    }
+    setSrc('air','fallback','Open-Meteo Air (대체)');
+  }
 }
 
-// 파서: wttr.in → 공통 w 형식
-function parseWttr(json) {
-  const c = json.current_condition[0];
-  const windDeg = parseInt(c.winddirDegree || 0);
-  const w = {
-    TMP:  parseFloat(c.temp_C),
-    ATMP: parseFloat(c.FeelsLikeC),
-    REH:  parseInt(c.humidity),
-    WSD:  Math.round(parseFloat(c.windspeedKmph) / 3.6 * 10) / 10,
-    WSG:  Math.round(parseFloat(c.windspeedKmph) / 3.6 * 1.3 * 10) / 10,
-    PCP:  parseFloat(c.precipMM || 0),
-    PRS:  parseInt(c.pressure || 1013),
-    VEC_DEG: windDeg,
-    VEC_STR: degToDir(windDeg),
-    CLOUD: parseInt(c.cloudcover || 0),
-    WX_CODE: parseInt(c.weatherCode || 1)
-  };
-  // wttr은 hourly 간단히
-  const fcst = {};
-  const now = new Date();
-  for (let i = 1; i <= 4; i++) {
-    const key = new Date(now.getTime() + i*3600000).toISOString();
-    fcst[key] = { TMP: w.TMP, REH: w.REH, WSD: w.WSD, PCP: 0, WX_CODE: 1 };
-  }
-  return { current: w, forecast: fcst };
-}
+// ══════════════════════════════════════════
+//  GitHub Actions가 저장한 JSON 읽기
+// ══════════════════════════════════════════
+async function loadActions() {
+  let anyOk = false;
 
-async function fetchWeather(region) {
-  const coord = REGION_COORDS[region] || REGION_COORDS['여수석화산단'];
-  const errors = [];
-
-  // 1차 시도: Open-Meteo
+  // 메타 정보
   try {
-    const result = await fetchOpenMeteo(coord);
-    const parsed = parseOpenMeteo(result.data);
-    parsed._source = 'Open-Meteo';
-    return parsed;
-  } catch(e1) {
-    errors.push('Open-Meteo: ' + e1.message);
-    console.warn('[EMI] Open-Meteo 실패:', e1.message);
-  }
+    const r = await fetch('./data/meta.json?'+Date.now());
+    if (r.ok) {
+      const j = await r.json();
+      if (j.updated) setT('data-updated', 'Actions 갱신: '+j.updated);
+    }
+  } catch(_) {}
 
-  // 2차 시도: wttr.in
+  // 단기예보 → 현재 기상값 + 오늘 시간별
   try {
-    const result = await fetchWttr(coord);
-    const parsed = parseWttr(result.data);
-    parsed._source = 'wttr.in';
-    return parsed;
-  } catch(e2) {
-    errors.push('wttr.in: ' + e2.message);
-    console.warn('[EMI] wttr.in 실패:', e2.message);
-  }
+    const r = await fetch('./data/shortterm.json?'+Date.now());
+    if (r.ok) {
+      const j = await r.json();
+      const items = j?.response?.body?.items?.item;
+      if (items?.length > 0) {
+        const today = items[0].fcstDate;
+        const byTime = {};
+        items.forEach(it => {
+          if (it.fcstDate !== today) return;
+          const h = parseInt(it.fcstTime.slice(0,2));
+          if (!byTime[h]) byTime[h] = {};
+          byTime[h][it.category] = it.fcstValue;
+        });
 
-  throw new Error('모든 API 실패 | ' + errors.join(' / '));
-}
-
-// parseWeather → fetchWeather 내 parseOpenMeteo / parseWttr 로 통합
-
-// WMO weather code → 아이콘
-function wxCodeIcon(code) {
-  if (code === 0) return '☀️';
-  if (code <= 3) return '🌤️';
-  if (code <= 9) return '🌫️';
-  if (code <= 19) return '🌧️';
-  if (code <= 29) return '🌩️';
-  if (code <= 39) return '🌫️';
-  if (code <= 49) return '🌫️';
-  if (code <= 69) return '🌧️';
-  if (code <= 79) return '❄️';
-  if (code <= 84) return '🌧️';
-  if (code <= 99) return '⛈️';
-  return '🌡️';
-}
-
-// ════════════════════════════════════════
-// EMI 계산
-// ════════════════════════════════════════
-function calcEMI(w) {
-  const t = w.TMP || 20, h = w.REH || 50, ws = w.WSD || 0, rain = w.PCP || 0, press = w.PRS || 1013;
-  const temp = t < 0 ? 20 : t < 5 ? 15 : t > 40 ? 18 : t > 35 ? 12 : t > 30 ? 7 : 2;
-  const hum  = h > 90 ? 20 : h > 80 ? 14 : h > 70 ? 8 : h < 20 ? 16 : h < 30 ? 10 : 2;
-  const wind = ws > 20 ? 20 : ws > 14 ? 16 : ws > 9 ? 11 : ws > 5 ? 6 : 1;
-  const rn   = rain > 30 ? 20 : rain > 10 ? 15 : rain > 5 ? 10 : rain > 0 ? 5 : 0;
-  const pr   = Math.abs(press - 1013) > 15 ? 20 : Math.abs(press - 1013) > 10 ? 13 : Math.abs(press - 1013) > 5 ? 7 : 2;
-  return { total: Math.min(100, temp+hum+wind+rn+pr), factors: { temp, hum, wind, rain: rn, press: pr } };
-}
-
-function emiLevel(score) {
-  if (score >= 75) return { level:'위험', color:'var(--red)', cls:'bg-red', icon:'🔴' };
-  if (score >= 55) return { level:'주의', color:'var(--orange)', cls:'bg-orange', icon:'🟠' };
-  if (score >= 35) return { level:'경계', color:'var(--yellow)', cls:'bg-yellow', icon:'🟡' };
-  return { level:'정상', color:'var(--green)', cls:'bg-green', icon:'🟢' };
-}
-
-function calcFacilityEMI(fac, w) {
-  const t = w.TMP||20, h = w.REH||50, ws = w.WSD||0, rain = w.PCP||0;
-  let score = 0; const issues = [];
-  if (t < fac.tempThresh.low) { score += Math.min(30,(fac.tempThresh.low-t)*2); issues.push(`저온 위험 (${t}°C)`); }
-  else if (t > fac.tempThresh.high) { score += Math.min(30,(t-fac.tempThresh.high)*2); issues.push(`고온 위험 (${t}°C)`); }
-  if (h > fac.humThresh.high) { score += Math.min(30,(h-fac.humThresh.high)*1.5); issues.push(`고습 주의 (${h}%)`); }
-  else if (h < fac.humThresh.low) { score += Math.min(20,(fac.humThresh.low-h)*1.2); issues.push(`저습 주의 (${h}%)`); }
-  if (ws > fac.windThresh) { score += Math.min(25,(ws-fac.windThresh)*2); issues.push(`강풍 (${ws}m/s)`); }
-  if (rain > fac.rainThresh) { score += Math.min(25,rain*2); issues.push(`강수 (${rain}mm)`); }
-  return { score: Math.min(100, Math.round(score)), issues };
-}
-
-// ════════════════════════════════════════
-// UI UPDATE
-// ════════════════════════════════════════
-function setMetric(id, val, label, color) {
-  const el = document.getElementById('m-'+id); if(el){el.textContent=val;el.style.color=color;}
-  const sl = document.getElementById('ms-'+id);
-  if(sl){sl.textContent=label;sl.style.background=color+'1a';sl.style.color=color;}
-}
-
-function updateWeatherUI(w) {
-  const t   = w.TMP   ?? '--';
-  const h   = w.REH   ?? '--';
-  const ws  = w.WSD   ?? '--';
-  const rain= w.PCP   ?? 0;
-  const press=w.PRS   ?? '--';
-  const atmp= w.ATMP  ?? '--';
-  const wsg = w.WSG   ?? '--';
-
-  // 온도 (체감 온도 sub-label)
-  const tLabel = t !== '--' && atmp !== '--' ? `${t>35?'고온':t<5?'저온':'정상'} (체감 ${atmp}°C)` : (t>35?'고온':t<5?'저온':'정상');
-  setMetric('temp', t, tLabel, t>35||t<5?(t>40||t<0?'var(--red)':'var(--orange)'):'var(--green)');
-
-  setMetric('hum', h, h>85?'고습':h<30?'저습':'정상', h>85||h<30?(h>90||h<20?'var(--red)':'var(--orange)'):'var(--green)');
-
-  // 풍속 (돌풍 표시)
-  const wLabel = wsg!=='--' ? `${ws>14?'강풍경보':ws>9?'강풍주의':'정상'} (돌풍 ${wsg}m/s)` : (ws>14?'강풍경보':ws>9?'강풍주의':'정상');
-  setMetric('wind', ws, wLabel, ws>14?'var(--red)':ws>9?'var(--orange)':'var(--green)');
-
-  // 풍향
-  document.getElementById('m-wdir').textContent = w.VEC_STR || '--';
-  document.getElementById('m-wdeg').textContent = (w.VEC_DEG||0) + '°';
-  document.getElementById('ms-wdir').textContent = (w.VEC_DEG||0) + '° / ' + (w.VEC_STR||'--');
-  document.getElementById('ms-wdir').style.background = 'rgba(0,212,255,.1)';
-  document.getElementById('ms-wdir').style.color = 'var(--accent)';
-
-  setMetric('rain', rain, rain>30?'폭우':rain>5?'강수중':rain>0?'약한비':'없음',
-    rain>30?'var(--red)':rain>5?'var(--orange)':rain>0?'var(--yellow)':'var(--green)');
-
-  const pd = Math.abs((press||1013)-1013);
-  setMetric('press', press, pd>15?'기압이상':'정상', pd>15?'var(--orange)':'var(--green)');
-}
-
-function updateEMIUI(emi) {
-  const s=emi.total, lv=emiLevel(s);
-  document.getElementById('emiScore').textContent=s; document.getElementById('emiScore').style.color=lv.color;
-  const b=document.getElementById('emiLevelBadge');
-  b.style.background=lv.color+'22'; b.style.borderColor=lv.color; b.style.color=lv.color;
-  document.getElementById('emiLevelIcon').textContent=lv.icon;
-  document.getElementById('emiLevelText').textContent=lv.level+' ('+s+'점)';
-  document.getElementById('emiGaugeFill').style.width=s+'%'; document.getElementById('emiGaugeFill').style.background=lv.color;
-  function sf(id,val,max){
-    const p=Math.min(100,(val/max)*100);
-    const c=p>75?'var(--red)':p>50?'var(--orange)':p>25?'var(--yellow)':'var(--green)';
-    document.getElementById('fb-'+id).style.width=p+'%'; document.getElementById('fb-'+id).style.background=c;
-    document.getElementById('fv-'+id).textContent=val;
-  }
-  sf('temp',emi.factors.temp,20); sf('hum',emi.factors.hum,20); sf('wind',emi.factors.wind,20);
-  sf('rain',emi.factors.rain,20); sf('press',emi.factors.press,20);
-}
-
-function updateFacilityUI(w) {
-  const grid = document.getElementById('facilityGrid');
-  grid.innerHTML = '';
-  for (const f of FACILITIES) {
-    const {score, issues} = calcFacilityEMI(f, w);
-    const lv = emiLevel(score);
-    const riskBg = score>=75?'rgba(255,61,61,.15)':score>=55?'rgba(255,140,0,.15)':score>=35?'rgba(255,200,0,.15)':'rgba(0,229,160,.15)';
-    const card = document.createElement('div');
-    card.className = 'fac-card';
-    card.onclick = () => openFacilityDrawer(f.id);
-    card.innerHTML = `
-      <div class="fac-card-bar" style="background:${lv.color}"></div>
-      <div class="fac-name">${f.icon} ${f.fullName}</div>
-      <div class="fac-sr">
-        <div class="fac-score" style="color:${lv.color}">${score}</div>
-        <div class="fac-risk" style="background:${riskBg};color:${lv.color}">${lv.level}</div>
-      </div>
-      <div class="emi-gauge" style="margin-bottom:8px">
-        <div style="height:100%;width:${score}%;background:${lv.color};border-radius:4px;transition:width 1s;"></div>
-      </div>
-      <div class="fac-issues">
-        ${issues.length===0?'<div class="fac-issue">✓ 현재 이상 없음</div>':issues.map(i=>`<div class="fac-issue">⚠ ${i}</div>`).join('')}
-      </div>
-      <div class="fac-click-hint">상세 분석 클릭 →</div>
-    `;
-    grid.appendChild(card);
-  }
-}
-
-function updateAlertUI(w, emi) {
-  const alerts = [], now = new Date().toLocaleTimeString('ko-KR',{hour12:false});
-  const t=w.TMP||20, h=w.REH||50, ws=w.WSD||0, rain=w.PCP||0;
-  if(emi.total>=75) alerts.push({l:'red',i:'🔴',title:`EMI 위험 (${emi.total}점)`,desc:'모든 방지시설 즉시 점검. 비상 대응 절차 준비'});
-  else if(emi.total>=55) alerts.push({l:'orange',i:'🟠',title:`EMI 주의 (${emi.total}점)`,desc:'모니터링 주기 단축, 담당자 현황 공유'});
-  else if(emi.total>=35) alerts.push({l:'yellow',i:'🟡',title:`EMI 경계 (${emi.total}점)`,desc:'운전 파라미터 재확인 권고'});
-  if(h>85) alerts.push({l:'orange',i:'💧',title:`고습 경보 (${h}%)`,desc:'백필터 여과포 흡습·전기집진기 절연 저하 위험'});
-  if(h<30) alerts.push({l:'yellow',i:'⚡',title:`저습 경보 (${h}%)`,desc:'정전기 발생→재비산. 접지·스파크 점검'});
-  if(ws>14) alerts.push({l:'red',i:'💨',title:`강풍 경보 (${ws}m/s)`,desc:'역압·비산 위험. 댐퍼·굴뚝 상태 확인'});
-  else if(ws>9) alerts.push({l:'orange',i:'💨',title:`강풍 주의 (${ws}m/s)`,desc:'분진 비산 가능. 외부 설비 점검'});
-  if(t<3) alerts.push({l:'red',i:'🌡️',title:`극저온 경보 (${t}°C)`,desc:'세정탑 동결·RTO 냉간시동 실패 위험'});
-  if(t>38) alerts.push({l:'orange',i:'🔥',title:`고온 경보 (${t}°C)`,desc:'RTO 과열·백필터 열화 위험'});
-  if(rain>10) alerts.push({l:'orange',i:'🌧️',title:`강수 주의 (${rain}mm)`,desc:'누수·부식 점검. 전기집진기 절연부 보호'});
-  if(alerts.length===0) alerts.push({l:'green',i:'✅',title:'현재 이상 없음',desc:'기상 파라미터 모두 방지시설 운전 적정 범위'});
-  document.getElementById('alertCount').textContent=alerts.length+'건';
-  const list=document.getElementById('alertList'); list.innerHTML='';
-  const cm={red:'var(--red)',orange:'var(--orange)',yellow:'var(--yellow)',green:'var(--green)'};
-  for(const a of alerts){
-    const el=document.createElement('div'); el.className='aitem'; el.style.borderLeftColor=cm[a.l];
-    el.innerHTML=`<div style="font-size:14px">${a.i}</div><div class="alert-content"><div class="atitle" style="color:${cm[a.l]}">${a.title}</div><div class="adesc">${a.desc}</div></div><div class="atime">${now}</div>`;
-    list.appendChild(el);
-  }
-}
-
-function updateGuideUI(w, emi) {
-  const t=w.TMP||20, h=w.REH||50, ws=w.WSD||0, rain=w.PCP||0, s=emi.total;
-  const imm=[];
-  if(s>=75) imm.push({step:'P1',title:'비상 대응',body:'안전 모드 전환, 비상 소집, 환경부 보고 체계 확인'});
-  if(h>85) imm.push({step:'P2',title:'고습 대응',body:'백필터 탈진 주기 50% 단축, ESP 전압 10% 감소, 세정탑 pH 점검'});
-  if(ws>9) imm.push({step:'P3',title:'강풍 대응',body:'굴뚝 상단·덕트 밀봉 점검, 차압계 확인'});
-  if(t<5) imm.push({step:'P4',title:'저온 대응',body:'세정탑 히팅라인 확인, RTO 예열 +30분, 동파방지 점검'});
-  if(rain>5) imm.push({step:'P5',title:'강수 대응',body:'ESP 외함 누수, 배수구 청소, 제어판 방수 확인'});
-  if(imm.length===0) imm.push({step:'OK',title:'정상 운전',body:'즉시 조치 사항 없음. 정기 점검 일정 준수'});
-  const mnt=[
-    {step:'M1',title:'백필터 여과포',body:'차압 설계값 120% 초과 시 교체 검토. 고습 후 섬유 손상 확인'},
-    {step:'M2',title:'ESP 절연체',body:'강수 후 1,000V DC 절연저항 1MΩ 이상 확인. 미달 시 건조'},
-    {step:'M3',title:'세정탑 충전재',body:'건기 후 스케일 확인, pH 6.5~7.5 유지'},
-    {step:'M4',title:'RTO 축열체',body:'온도 변화 후 균열 점검, 차압 설계값 ±10% 확인'}
-  ];
-  const mon=[
-    {step:'W1',title:'TMS 모니터링',body:'기상 악화 시 배출농도 TMS 주기 1h→30min 단축'},
-    {step:'W2',title:'차압 감시',body:'강풍 시 여과집진기 차압 15분 간격. 130% 초과 시 즉시 탈진'},
-    {step:'W3',title:'3h 예보 연동',body:'EMI 상승 예측 시 사전 설비 조정 계획 수립'},
-    {step:'W4',title:'민원 대비',body:'풍향 변화로 취락지구 방향 시 냄새·분진 민원 사전 점검'}
-  ];
-  function rg(id,items){document.getElementById('guide-'+id).innerHTML=items.map(g=>`<div class="gitem"><div class="gstep">${g.step}</div><div class="gtext"><strong>${g.title}</strong>${g.body}</div></div>`).join('');}
-  rg('immediate',imm); rg('maintenance',mnt); rg('monitoring',mon);
-}
-
-function updateForecastUI(fcst, w) {
-  const row = document.getElementById('fcstRow');
-  row.innerHTML = '';
-  const keys = Object.keys(fcst).sort().slice(0, 4);
-  for (const key of keys) {
-    const fd = fcst[key];
-    const fw = { ...w, ...fd };
-    const fe = calcEMI(fw);
-    const lv = emiLevel(fe.total);
-    // 시간 파싱: ISO 또는 YYYYMMDHHMM 모두 처리
-    let hrLabel = '--';
-    try {
-      const d = new Date(key);
-      hrLabel = d.getHours().toString().padStart(2,'0') + ':00';
-    } catch(e) {}
-    const ico = wxCodeIcon(fd.WX_CODE || 0);
-    const el = document.createElement('div');
-    el.className = 'fcst-item';
-    el.innerHTML = `
-      <div class="fcst-time">${hrLabel}</div>
-      <div class="fcst-ico">${ico}</div>
-      <div class="fcst-emi" style="color:${lv.color}">${fe.total}</div>
-      <div style="font-size:9px;color:${lv.color}">${lv.level}</div>
-    `;
-    row.appendChild(el);
-  }
-}
-
-// ════════════════════════════════════════
-// FACILITY DETAIL DRAWER
-// ════════════════════════════════════════
-function openFacilityDrawer(facId) {
-  const fac = FACILITIES.find(f => f.id === facId);
-  if (!fac) return;
-  const w = weatherData || lastWeatherData;
-  if (!w) return;
-
-  const { score } = calcFacilityEMI(fac, w);
-  const lv = emiLevel(score);
-
-  // 헤더
-  document.getElementById('drw-icon').textContent = fac.icon;
-  document.getElementById('drw-name').textContent = fac.fullName;
-  document.getElementById('drw-sub').textContent = fac.desc;
-  const _coord = REGION_COORDS[currentRegion] || REGION_COORDS['여수석화산단'];
-  document.getElementById('drw-sub').textContent = fac.desc + ' | ' + currentRegion + ' (' + _coord.lat + '°N ' + _coord.lon + '°E)';
-  const sb = document.getElementById('drw-score-badge');
-  sb.textContent = score;
-  sb.style.color = lv.color;
-  sb.style.borderColor = lv.color;
-  sb.style.background = lv.color + '22';
-
-  // 본문
-  const body = document.getElementById('drw-body');
-  body.innerHTML = '';
-
-  // 데이터 출처 배지
-  const srcBadge = document.createElement('div');
-  srcBadge.style.display = 'flex';
-  srcBadge.style.alignItems = 'center';
-  srcBadge.style.justifyContent = 'space-between';
-  srcBadge.style.flexWrap = 'wrap';
-  srcBadge.style.gap = '8px';
-  const badge = isRealtime
-    ? `<span class="data-src-badge">● 실시간 기상청 API · ${lastUpdateTime||''}</span>`
-    : `<span class="data-src-badge sim">● 시뮬레이션 데이터 (최신 캐시)</span>`;
-  srcBadge.innerHTML = badge + `<span style="font-size:10px;color:var(--text3);font-family:var(--mono)">기준: ${currentRegion} / 조회시각 ${new Date().toLocaleTimeString('ko-KR',{hour12:false})}</span>`;
-  body.appendChild(srcBadge);
-
-  // 현재 기상 요약
-  const wxSec = document.createElement('div');
-  wxSec.innerHTML = `
-    <div style="font-size:11px;font-weight:700;color:var(--text2);letter-spacing:2px;margin-bottom:10px;">현재 기상 현황</div>
-    <div class="wx-summary">
-      <div class="wxs-item">
-        <div class="wxs-val" style="color:${(w.TMP||20)>35||(w.TMP||20)<5?'var(--orange)':'var(--accent)'}">${w.TMP??'--'}°C</div>
-        <div class="wxs-name">온도 / 체감 ${w.ATMP??'--'}°C</div>
-      </div>
-      <div class="wxs-item">
-        <div class="wxs-val" style="color:${(w.REH||50)>80||(w.REH||50)<30?'var(--orange)':'var(--accent)'}">${w.REH??'--'}%</div>
-        <div class="wxs-name">습도</div>
-      </div>
-      <div class="wxs-item">
-        <div class="wxs-val" style="color:${(w.WSD||0)>9?'var(--orange)':'var(--accent)'}">${w.WSD??'--'}<span style="font-size:12px">m/s</span></div>
-        <div class="wxs-name">풍속</div>
-      </div>
-      <div class="wxs-item">
-        <div class="wxs-val" style="color:${(w.PCP||0)>5?'var(--orange)':'var(--accent)'}">${w.PCP??0}<span style="font-size:12px">mm</span></div>
-        <div class="wxs-name">강수량</div>
-      </div>
-      <div class="wxs-item">
-        <div class="wxs-val" style="color:var(--accent)">${w.VEC_STR||'--'} ${w.VEC_DEG||0}°</div>
-        <div class="wxs-name">풍향</div>
-      </div>
-      <div class="wxs-item">
-        <div class="wxs-val" style="color:var(--accent)">${w.PRS??'--'}<span style="font-size:10px">hPa</span></div>
-        <div class="wxs-name">기압</div>
-      </div>
-    </div>
-  `;
-  body.appendChild(wxSec);
-
-  // 임계값 게이지
-  const tgSec = document.createElement('div');
-  tgSec.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--text2);letter-spacing:2px;margin-bottom:10px;">임계값 대비 현황</div>`;
-  const gauges = [
-    { name:'온도', cur: w.TMP||20, low: fac.tempThresh.low, high: fac.tempThresh.high, unit:'°C', range:[-10,60] },
-    { name:'습도', cur: w.REH||50, low: fac.humThresh.low,  high: fac.humThresh.high,  unit:'%',  range:[0,100] },
-    { name:'풍속', cur: w.WSD||0,  low: 0,                  high: fac.windThresh,       unit:'m/s',range:[0,30] },
-    { name:'강수', cur: w.PCP||0,  low: 0,                  high: fac.rainThresh,       unit:'mm', range:[0,50] },
-  ];
-  const tgWrap = document.createElement('div');
-  tgWrap.className = 'thresh-gauges';
-  for (const g of gauges) {
-    const pct = Math.max(0, Math.min(100, ((g.cur - g.range[0]) / (g.range[1] - g.range[0])) * 100));
-    const highPct = Math.max(0, Math.min(100, ((g.high - g.range[0]) / (g.range[1] - g.range[0])) * 100));
-    const lowPct  = g.low > g.range[0] ? Math.max(0, Math.min(100, ((g.low - g.range[0]) / (g.range[1] - g.range[0])) * 100)) : -1;
-    const exceed = g.cur > g.high || (g.low > 0 && g.cur < g.low);
-    const gcolor = exceed ? 'var(--orange)' : 'var(--green)';
-    const isNow = exceed ? `<span class="now-indicator"><span class="now-dot"></span>임계 초과</span>` : '';
-    tgWrap.innerHTML += `
-      <div class="tg-item">
-        <div class="tg-header">
-          <span class="tg-name">${g.name}${isNow}</span>
-          <span class="tg-reading" style="color:${gcolor}">${g.cur}${g.unit} <span style="font-size:9px;color:var(--text3)">/ 상한 ${g.high}${g.unit}${g.low>0?' 하한 '+g.low+g.unit:''}</span></span>
-        </div>
-        <div class="tg-track">
-          <div class="tg-fill" style="width:${pct}%;background:${gcolor}"></div>
-          <div class="tg-marker" style="left:${highPct}%;background:var(--red);opacity:.8"></div>
-          ${lowPct>=0?`<div class="tg-marker" style="left:${lowPct}%;background:var(--yellow);opacity:.8"></div>`:''}
-        </div>
-      </div>
-    `;
-  }
-  tgSec.appendChild(tgWrap);
-  body.appendChild(tgSec);
-
-  // 케이스 분석 테이블
-  const caseSec = document.createElement('div');
-  caseSec.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--text2);letter-spacing:2px;margin-bottom:10px;">기상 영향 케이스 분석</div>`;
-  const table = document.createElement('table');
-  table.className = 'case-table';
-  table.innerHTML = `<thead><tr>
-    <th style="width:70px">케이스ID</th>
-    <th style="width:60px">인자</th>
-    <th>발생 조건</th>
-    <th style="width:50px">심각도</th>
-    <th style="width:70px">현재 상태</th>
-  </tr></thead><tbody></tbody>`;
-  const tbody = table.querySelector('tbody');
-
-  for (const c of fac.cases) {
-    const triggered = c.trigger(w);
-    const sev = triggered ? c.severity(w) : '해당없음';
-    const sevColor = sev==='위험'?'var(--red)':sev==='주의'?'var(--orange)':sev==='경계'?'var(--yellow)':'var(--text3)';
-    const rowClass = sev==='위험'?'danger-case':triggered?'active-case':'';
-    const tr = document.createElement('tr');
-    tr.className = 'case-row ' + rowClass;
-    tr.style.cursor = 'pointer';
-    tr.innerHTML = `
-      <td><span style="font-family:var(--mono);font-size:10px;color:var(--accent)">${c.id}</span></td>
-      <td><span class="ctag" style="background:rgba(0,212,255,.1);color:var(--accent)">${c.param}</span></td>
-      <td style="font-size:11px;color:var(--text2)">${c.condition}</td>
-      <td><span class="ctag" style="background:${sevColor}22;color:${sevColor}">${sev}</span></td>
-      <td style="text-align:center">
-        ${triggered
-          ? `<span class="now-indicator"><span class="now-dot" style="background:${sevColor}"></span>발생중</span>`
-          : `<span style="font-size:9px;color:var(--text3);font-family:var(--mono)">미해당</span>`
+        // 현재 시각 기준 가장 가까운 예보값을 현재 날씨로
+        const nowH = new Date(Date.now()+9*3600000).getUTCHours();
+        const hours = Object.keys(byTime).map(Number).sort((a,b)=>a-b);
+        const nearH = hours.reduce((prev,cur) => Math.abs(cur-nowH)<Math.abs(prev-nowH)?cur:prev, hours[0]);
+        if (byTime[nearH]) {
+          const d = byTime[nearH];
+          const t = parseFloat(d.TMP ?? 'NaN');
+          if (isValidTemp(t)) {
+            D.temp = t;
+            D.hum  = parseFloat(d.REH ?? '60');
+            D.wind = parseFloat(d.WSD ?? '3');
+            D.rain = d.PCP==='강수없음' ? 0 : parseFloat(d.PCP ?? '0');
+            // dt24: 6시간 전 기온과 비교
+            const prev6H = hours.find(h => Math.abs(h-(nowH-6)) < 2);
+            if (prev6H && byTime[prev6H]?.TMP) {
+              D.dt24 = +Math.abs(t - parseFloat(byTime[prev6H].TMP)).toFixed(1);
+            } else {
+              D.dt24 = 1;
+            }
+            anyOk = true;
+          }
         }
-      </td>
-    `;
-    // 클릭 시 상세 펼치기
-    tr.onclick = () => toggleCaseDetail(tr, c, w, sevColor);
-    tbody.appendChild(tr);
-  }
-  caseSec.appendChild(table);
-  body.appendChild(caseSec);
 
-  // 활성화된 케이스 대응 조치 (현재 트리거된 것)
-  const activeCases = fac.cases.filter(c => c.trigger(w));
-  if (activeCases.length > 0) {
-    const actSec = document.createElement('div');
-    actSec.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--orange);letter-spacing:2px;margin-bottom:10px;">⚡ 현재 조건 기준 즉시 대응 조치</div>`;
-    const al = document.createElement('div'); al.className = 'action-list';
-    for (const c of activeCases) {
-      const sev = c.severity(w);
-      const sevColor = sev==='위험'?'var(--red)':sev==='주의'?'var(--orange)':'var(--yellow)';
-      for (const act of c.actions) {
-        const ai = document.createElement('div');
-        ai.className = 'action-item';
-        ai.style.borderLeftColor = sevColor;
-        ai.innerHTML = `
-          <div class="action-step" style="color:${sevColor}">${act.step}</div>
-          <div class="action-body">
-            <div class="action-title">[${c.id}] ${act.title}</div>
-            <div class="action-desc">${act.desc}</div>
-          </div>
-        `;
-        al.appendChild(ai);
-      }
-      if (c.ref) {
-        const ref = document.createElement('div');
-        ref.style.fontSize = '9px'; ref.style.color = 'var(--text3)'; ref.style.fontFamily = 'var(--mono)';
-        ref.style.padding = '4px 8px'; ref.style.marginTop = '-2px';
-        ref.textContent = '📚 ' + c.ref;
-        al.appendChild(ref);
+        // 오늘 전체 시간별 예보 (0~23시)
+        D.todayFc = [];
+        for (let h=0; h<=23; h++) {
+          const d2 = byTime[h];
+          if (!d2) continue;
+          const tmp = parseFloat(d2.TMP ?? 'NaN');
+          if (!isValidTemp(tmp)) continue;
+          D.todayFc.push({
+            hour: h,
+            temp: tmp,
+            wind: parseFloat(d2.WSD ?? '3'),
+            rain: d2.PCP==='강수없음' ? 0 : parseFloat(d2.PCP ?? '0'),
+            hum:  parseFloat(d2.REH ?? '60'),
+            sky:  d2.SKY ?? '1',   // 1맑음 3구름많음 4흐림
+            pty:  d2.PTY ?? '0'    // 0없음 1비 2비/눈 3눈 4소나기
+          });
+        }
+        setSrc('rt','ok','기상청 단기예보 (Actions)');
+        setSrc('fc','ok','기상청 단기예보 (Actions)');
       }
     }
-    actSec.appendChild(al);
-    body.appendChild(actSec);
-  } else {
-    const okSec = document.createElement('div');
-    okSec.style.padding = '16px'; okSec.style.textAlign = 'center';
-    okSec.style.background = 'rgba(0,229,160,.06)'; okSec.style.borderRadius = '8px';
-    okSec.style.border = '1px solid rgba(0,229,160,.2)';
-    okSec.innerHTML = `<div style="font-size:24px;margin-bottom:8px">✅</div><div style="font-size:13px;color:var(--green);font-weight:700">모든 케이스 정상 범위</div><div style="font-size:11px;color:var(--text3);margin-top:4px">현재 기상 조건에서 ${fac.name}에 대한 특이사항 없음</div>`;
-    body.appendChild(okSec);
-  }
+  } catch(_) {}
 
-  // 열기
-  document.getElementById('drawer-overlay').classList.add('open');
-  document.getElementById('drawer').classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-// 케이스 행 클릭 시 상세 토글
-function toggleCaseDetail(tr, c, w, sevColor) {
-  const nextRow = tr.nextElementSibling;
-  if (nextRow && nextRow.classList.contains('case-detail-row')) {
-    nextRow.remove(); return;
-  }
-  const detail = document.createElement('tr');
-  detail.className = 'case-detail-row';
-  detail.innerHTML = `<td colspan="5" style="padding:0;background:rgba(0,212,255,.03);">
-    <div style="padding:14px 16px;border-top:1px solid rgba(0,212,255,.1);">
-      <div style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:1px;margin-bottom:6px;">영향 메커니즘</div>
-      <div style="font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:10px;">${c.mechanism}</div>
-      <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1px;margin-bottom:4px;">임계값 기준</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:10px;">${c.threshold}</div>
-      ${c.actions.length > 0 ? `
-        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1px;margin-bottom:6px;">대응 조치</div>
-        <div style="display:flex;flex-direction:column;gap:5px;">
-          ${c.actions.map(a=>`<div style="display:flex;gap:8px;font-size:10px;"><span style="color:${sevColor};font-family:var(--mono);font-weight:700;white-space:nowrap">[${a.step}]</span><span style="color:var(--text2)"><strong style="color:var(--text)">${a.title}:</strong> ${a.desc}</span></div>`).join('')}
-        </div>
-      ` : ''}
-      ${c.ref ? `<div style="margin-top:8px;font-size:9px;color:var(--text3);font-family:var(--mono)">📚 ${c.ref}</div>` : ''}
-    </div>
-  </td>`;
-  tr.insertAdjacentElement('afterend', detail);
-}
-
-function closeDrawer() {
-  document.getElementById('drawer-overlay').classList.remove('open');
-  document.getElementById('drawer').classList.remove('open');
-  document.body.style.overflow = '';
-}
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
-
-// ════════════════════════════════════════
-// MAIN DATA FETCH — Open-Meteo 실시간
-// ════════════════════════════════════════
-async function fetchAllData() {
-  // 혹시 오버레이가 남아있으면 즉시 제거
-  var ov = document.getElementById('loadingOverlay');
-  if (ov) ov.style.display = 'none';
-
-  const statusEl = document.getElementById('apiStatus');
-  if (statusEl) { statusEl.className = 'api-st loading'; statusEl.textContent = currentRegion + ' 날씨 수집 중...'; }
-
-  const ldTxt = document.getElementById('loadTxt');
-  const ldDet = document.getElementById('loadDetail');
-  if (ldTxt) ldTxt.textContent = currentRegion + ' 실시간 기상 수집 중...';
-  if (ldDet) ldDet.textContent = '① Open-Meteo  ② wttr.in 순서로 연결 시도';
-
+  // 에어코리아
   try {
-    console.log('[EMI] fetchWeather 요청:', currentRegion, REGION_COORDS[currentRegion]);
-    const parsed = await fetchWeather(currentRegion);
-    const w = parsed.current;
-    const emi = calcEMI(w);
-
-    weatherData = w;
-    lastWeatherData = { ...w };
-    isRealtime = true;
-
-    const coord = REGION_COORDS[currentRegion] || REGION_COORDS['여수석화산단'];
-    const t = new Date().toLocaleTimeString('ko-KR', { hour12: false });
-    lastUpdateTime = t;
-    document.getElementById('lastUpdate').textContent =
-      '✅ 실시간: ' + t + ' | ' + coord.label;
-
-    updateWeatherUI(w);
-    updateEMIUI(emi);
-    updateFacilityUI(w);
-    updateAlertUI(w, emi);
-    updateGuideUI(w, emi);
-    updateForecastUI(parsed.forecast, w);
-
-    statusEl.className = 'api-st ok';
-    const src = parsed._source || 'API';
-    statusEl.textContent = '🛰 ' + currentRegion + ' · ' + src + ' 실시간 (' + coord.lat + '°N)';
-    // 에러 배너 숨기기
-    const banner = document.getElementById('apiErrorBanner');
-    if (banner) banner.style.display = 'none';
-    console.log('[EMI] 실시간 데이터 로드 성공 (' + src + '):', w);
-
-  } catch (e) {
-    console.warn('[EMI] API 실패:', e.message);
-    isRealtime = false;
-    if (ldDet) ldDet.textContent = '⚠ ' + e.message;
-    // API 실패: 연결 안내 표시
-    var statusEl2 = document.getElementById('apiStatus');
-    if (statusEl2) { statusEl2.className = 'api-st err'; statusEl2.textContent = '⚠ API 연결 실패 — 새로고침 또는 네트워크 확인'; }
-    var lu = document.getElementById('lastUpdate');
-    if (lu) lu.textContent = '⚠ 미연결 | ' + new Date().toLocaleTimeString('ko-KR',{hour12:false});
-    // 기존 데이터 없으면 "--" 표시
-    if (!lastWeatherData) {
-      var sc = document.getElementById('emiScore');
-      if (sc) { sc.textContent = '--'; sc.style.color = 'var(--text3)'; }
-      var lt = document.getElementById('emiLevelText');
-      if (lt) lt.textContent = 'API 연결 필요';
-      var al = document.getElementById('alertList');
-      if (al) al.innerHTML = '<div class="no-data" style="color:var(--red);">⚠ 실시간 데이터 없음<br><small>인터넷 연결 후 새로고침 하세요</small></div>';
+    const r = await fetch('./data/air.json?'+Date.now());
+    if (r.ok) {
+      const j = await r.json();
+      const item = j?.response?.body?.items?.[0];
+      if (item) {
+        const p = parseFloat(item.pm25Value ?? 'NaN');
+        if (!isNaN(p) && p>=0 && p<1000) {
+          D.pm25 = p;
+          D.so2  = parseFloat(item.so2Value  ?? 'NaN') || null;
+          D.no2  = parseFloat(item.no2Value  ?? 'NaN') || null;
+          setSrc('air','ok','에어코리아 (Actions)');
+          anyOk = true;
+        }
+      }
     }
+  } catch(_) {}
+
+  return anyOk;
+}
+
+// ══════════════════════════════════════════
+//  메인 로드 함수
+// ══════════════════════════════════════════
+async function loadAll() {
+  setT('lastupdate','로딩 중...');
+  setSrcAll('load','수신 중...');
+
+  const actionsOk = await loadActions();
+
+  // Actions 데이터 없으면 Open-Meteo 폴백
+  if (!actionsOk || D.temp === null) {
+    await fetchOpenMeteo();
   }
 
-  document.getElementById('loadingOverlay').style.display = 'none';
+  D.loaded = true;
+  renderAll();
+  setT('lastupdate','갱신: '+new Date().toLocaleTimeString('ko-KR',{hour12:false}));
 }
 
-// ════════════════════════════════════════
-// FALLBACK — 지역별 기후 특성 기반 추정값
-// ★ 지역 바뀔 때마다 재실행되어 지역 특성 반영
-// ════════════════════════════════════════
+// ══════════════════════════════════════════
+//  위험도 계산 모델
+// ══════════════════════════════════════════
+function sigmoid(z) { return 1/(1+Math.exp(-z)); }
+function isValidTemp(t) { return !isNaN(t) && t > -50 && t < 60; }
 
+function calcRisk(t, h, w, r, s, p, dt) {
+  const T=t??20, H=h??60, W=w??5, R=r??0;
+  const S=s??0.005, P=p??20, DT=dt??1;
+  const wLow = Math.max(0,(3.0-W)/3.0);
+  const HS   = Math.min(1,(H/100)*(S/0.05));
+  const dtN  = Math.min(1,DT/10);
+  const tN   = Math.min(1,Math.max(0,(T-20)/20));
+  const pmN  = Math.min(1,P/150);
+  const invN = pmN>0.3 ? Math.min(1,(pmN-0.3)*2) : 0;
+  const pChem = sigmoid(-1.2 + 2.8*wLow + 1.9*dtN  + 2.3*HS);
+  const pFall = sigmoid(-1.5 + 1.6*tN   + 0.8*(W/15) + 1.2*Math.min(1,R/20));
+  const pEnv  = sigmoid(-1.8 + 2.1*pmN  + 0.9*(tN*.8) + 1.4*invN);
+  const total = pChem*.5 + pFall*.3 + pEnv*.2;
+  return { pChem, pFall, pEnv, total, wLow, HS, dtN, tN, pmN };
+}
 
+// 중기예보 날씨 코드 → 위험 인자 추정
+function midRisk(wf, minT, maxT) {
+  const desc = wf || '';
+  let rainMult = desc.includes('비') ? 1.4 : desc.includes('소나기') ? 1.2 : 1.0;
+  let windMult = desc.includes('강풍') ? 1.3 : 1.0;
+  const avgT = (isNaN(maxT)||isNaN(minT)) ? 22 : (maxT+minT)/2;
+  const estWind = desc.includes('강풍') ? 8 : 3.5;
+  const estRain = desc.includes('비') ? 5 : 0;
+  const estHum  = desc.includes('비')||desc.includes('흐림') ? 75 : 60;
+  const R = calcRisk(avgT, estHum, estWind, estRain, 0.005, 20, Math.abs(maxT-minT)*0.5);
+  return R.total;
+}
 
-const REGION_NOTES = {
-  '여수석화산단': { icon:'🌊', title:'여수 석유화학산단', body:'해안 인접 · 남서풍 시 여천·돌산 이동 주의 · 여름 고온다습(RH 80%+) · 태풍 영향권 (6~9월)' },
-  '여수시내':     { icon:'🌊', title:'여수 시내', body:'돌산도·오동도 해안 지형 · 해풍/육풍 일교차 있음 · 항만 산업 배출 감시' },
-  '광양제철':     { icon:'🏭', title:'광양 제철단지', body:'섬진강 하구 인접 · 안개 빈도 높음 · 제철 배가스 방지시설 집중 관리' },
-  '순천':         { icon:'🌿', title:'순천', body:'순천만 생태 보전구역 인접 · 내륙 분지 지형 · 대기오염 정체 주의' },
-};
+// ══════════════════════════════════════════
+//  단계 분류
+// ══════════════════════════════════════════
+function levelOf(v) {
+  if (v>=.65) return 'alert';
+  if (v>=.45) return 'watch';
+  if (v>=.30) return 'caution';
+  return 'safe';
+}
+const LVL_KO = {safe:'안전', caution:'조심', watch:'주의', alert:'경계'};
+const LVL_NAME = {safe:'정상 운영 중', caution:'모니터링 강화', watch:'점검 즉시 실시', alert:'즉각 대응 필요'};
+const WF_ICON = {'맑음':'&#9728;','구름많음':'&#9729;','흐림':'&#9729;','비':'&#127783;','소나기':'&#127783;','눈':'&#10052;','정보없음':'&#8212;'};
 
-function updateRegionNote(region) {
-  const note = REGION_NOTES[region];
-  if (!note) {
-    document.getElementById('regionNote').style.display = 'none'; return;
+function wfIcon(wf) {
+  for (const [k,v] of Object.entries(WF_ICON)) { if ((wf||'').includes(k)) return v; }
+  return '&#9728;';
+}
+
+function dayLabel(dateStr) {
+  const d = new Date(dateStr);
+  const days = ['일','월','화','수','목','금','토'];
+  return `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`;
+}
+
+// ══════════════════════════════════════════
+//  전체 UI 렌더
+// ══════════════════════════════════════════
+function renderAll() {
+  const { pChem, pFall, pEnv, total, wLow, HS } = calcRisk(
+    D.temp, D.hum, D.wind, D.rain, D.so2, D.pm25, D.dt24
+  );
+  const lvl = levelOf(total);
+  const T=D.temp??20, H=D.hum??60, W=D.wind??5, R=D.rain??0;
+  const S=D.so2??0.005, P=D.pm25??20, DT=D.dt24??1;
+
+  // ── 메인 배지 ──
+  const badge = document.getElementById('riskBadge');
+  badge.className = `risk-badge ${lvl}`;
+  badge.textContent = LVL_KO[lvl];
+  setT('riskName', LVL_NAME[lvl]);
+
+  const trigs=[];
+  if (W<3)           trigs.push(`저풍속 ${W.toFixed(1)}m/s`);
+  if (DT>=5)         trigs.push(`ΔT ${DT.toFixed(1)}°C`);
+  if (P>=35)         trigs.push(`PM ${P.toFixed(0)}μg/m³`);
+  if (T>=28)         trigs.push(`고온 ${T.toFixed(1)}°C`);
+  setT('riskSub', trigs.length ? trigs.join(' · ')+' 감지' : '현재 주요 위험 인자 없음');
+
+  // ── 유형별 ──
+  const setBar = (pid, bid, tid, v, trig) => {
+    const lv=levelOf(v);
+    const el=document.getElementById(pid);
+    if(el){el.className=`rlvl ${lv}`;el.textContent=LVL_KO[lv];}
+    const b=document.getElementById(bid); if(b) b.style.width=(v*100).toFixed(1)+'%';
+    setH(tid, trig);
+  };
+  setBar('rl-chem','bar-chem','trig-chem', pChem,
+    `저풍속 ${W.toFixed(1)}m/s · ΔT ${DT.toFixed(1)}°C · H×S ${HS.toFixed(2)}`);
+  setBar('rl-fall','bar-fall','trig-fall', pFall,
+    `기온 ${T.toFixed(1)}°C · 강수 ${R.toFixed(1)}mm/h`);
+  setBar('rl-env','bar-env','trig-env', pEnv,
+    `PM2.5 ${P!==null&&!isNaN(P)?P.toFixed(0):'?'}μg/m³`);
+
+  // ── 기상 카드 ──
+  const lv = (v,t,dir='o') => v!==null&&!isNaN(v) ? (dir==='o'?v>=t:v<=t)?'w':'' : '';
+  setWv('w-t', T,  '°C', lv(T,28));
+  setWv('w-h', H,  '%',  '');
+  setWv('w-w', W,  'm/s',lv(W,3,'u'));
+  setWv('w-r', R===0?'0.0':R.toFixed(1), 'mm/h', lv(R,5));
+  setWv('w-so2', S!==null&&!isNaN(S)?S.toFixed(3):null, 'ppm', lv(S,0.05));
+  setWv('w-pm',  P!==null&&!isNaN(P)?P.toFixed(0) :null, 'μg/m³', P>=75?'r':P>=35?'w':'');
+  setWv('w-no2', D.no2!==null&&!isNaN(D.no2)?D.no2.toFixed(3):null, 'ppm', lv(D.no2,0.06));
+  setWv('w-dt', DT.toFixed(1), '°C', lv(DT,5));
+
+  if (W<3)   setH('ws-w', '<span style="color:var(--lv-watch);font-size:9px">⚠ 저풍속</span>');
+  if (T>=28)  setH('ws-t', '<span style="color:var(--lv-watch);font-size:9px">⚠ 고온</span>');
+  const pmG = P>=75?'🔴 나쁨':P>=35?'🟡 보통':'🟢 좋음';
+  setH('ws-pm',`<span style="color:${P>=75?'var(--lv-alert)':P>=35?'var(--lv-watch)':'var(--lv-safe)'};font-size:9px">${pmG}</span>`);
+
+  // ── 가이드 ──
+  renderGuide(lvl);
+
+  // ── 오늘 하루 전체 시간별 차트 ──
+  renderAlldayFc();
+
+  // ── 사례 카드 ──
+  buildCases({ pChem, pFall, pEnv });
+
+  // ── 수식 모달 값 ──
+  setT('sc-chem', (pChem*100).toFixed(1)+'%'); setH('sl-chem', lvlSpan(levelOf(pChem)));
+  setT('sc-fall', (pFall*100).toFixed(1)+'%'); setH('sl-fall', lvlSpan(levelOf(pFall)));
+  setT('sc-env',  (pEnv*100).toFixed(1)+'%');  setH('sl-env',  lvlSpan(levelOf(pEnv)));
+  setT('sc-total',(total*100).toFixed(1)+'%'); setH('sl-total',lvlSpan(lvl));
+  setH('fv-dt', DT.toFixed(1)+'°C');  setH('fs-dt', stH(DT,5));
+  setH('fv-w',  W.toFixed(1)+'m/s');  setH('fs-w',  stH(W,3,'u'));
+  setH('fv-hs', HS.toFixed(3));        setH('fs-hs', stH(HS,0.7));
+  setH('fv-pm', P!==null&&!isNaN(P)?P.toFixed(0)+'μg/m³':'?'); setH('fs-pm', stH(P??0,50));
+  setH('fv-t',  T.toFixed(1)+'°C');   setH('fs-t',  stH(T,25));
+
+  // ── 사례 모달 값 ──
+  setH('m1-w',  W.toFixed(1)+'m/s');  setH('m1-ws',  stH(W,3,'u'));
+  setH('m1-dt', DT.toFixed(1)+'°C'); setH('m1-dts', stH(DT,5));
+  setH('m1-hs', HS.toFixed(3));       setH('m1-hss', stH(HS,0.7));
+  setH('m2-t',  T.toFixed(1)+'°C');  setH('m2-ts',  stH(T,25));
+  setH('m2-r',  R.toFixed(1)+'mm/h');setH('m2-rs',  stH(R,5));
+  setH('m3-pm', P!==null&&!isNaN(P)?P.toFixed(0)+'μg/m³':'?'); setH('m3-pms', stH(P??0,50));
+  setH('m3-t',  T.toFixed(1)+'°C');  setH('m3-ts',  stH(T,25));
+
+  // ── 티커 ──
+  const tk = (a,b,v,c) => { [a,b].forEach(id=>{ const e=document.getElementById(id); if(e){e.innerHTML=v;e.className=c;}}); };
+  tk('tk-t','tk-t2',   T.toFixed(1)+'°C',   T>=28?'w':'v');
+  tk('tk-h','tk-h2',   H.toFixed(0)+'%',    'v');
+  tk('tk-w','tk-w2',   W.toFixed(1)+'m/s'+(W<3?' ⚠':''), W<3?'w':'v');
+  tk('tk-pm','tk-pm2', P!==null&&!isNaN(P)?P.toFixed(0)+'μg':'?', P>=35?'w':'v');
+  tk('tk-so2','tk-so2-2', S!==null&&!isNaN(S)?S.toFixed(3)+'ppm':'?', 'v');
+  tk('tk-dt','tk-dt2', DT.toFixed(1)+'°C',  DT>=5?'w':'v');
+  tk('tk-lvl','tk-lvl2', LVL_KO[lvl], lvl==='alert'?'r':lvl==='watch'?'w':lvl==='caution'?'c':'g');
+}
+
+// ── 단기예보 시간별 차트 ──
+function renderShortFc() {
+  const fc = D.shortFc;
+  if (!fc.length) {
+    setH('shortFcArea','<div style="text-align:center;padding:16px;color:var(--lv-watch);font-size:11px">⚠ 단기예보 데이터 없음 — GitHub Actions 미실행 또는 대체 데이터 사용 중</div>');
+    return;
   }
-  document.getElementById('regionNote').style.display = 'flex';
-  document.getElementById('regionNoteIcon').textContent = note.icon;
-  const coord = REGION_COORDS[region] || REGION_COORDS['여수석화산단'];
-  document.getElementById('regionNoteText').innerHTML =
-    `<strong style="color:var(--orange);">${note.title} 지역 특성</strong> · ${note.body} · <span style="color:var(--accent);font-family:var(--mono);">${coord.lat}°N ${coord.lon}°E</span>`;
+  const risks = fc.map(f => {
+    const R = calcRisk(f.temp, f.hum, f.wind, f.rain, D.so2, D.pm25, D.dt24);
+    return { ...f, risk: R.total, lv: levelOf(R.total) };
+  });
+  const maxR = Math.max(...risks.map(r=>r.risk));
+  const peak = risks.find(r=>r.risk===maxR);
+
+  setH('shortFcArea',`
+    <div class="fcwrap">
+      <div class="fcbars">
+        ${risks.map(s=>`
+          <div class="fccol">
+            <div class="fcbarwrap">
+              <div class="fcbar ${s.lv}" style="height:${(s.risk/maxR*100).toFixed(0)}%" title="${s.hour}시 ${(s.risk*100).toFixed(1)}%"></div>
+            </div>
+            <div class="fclvl ${s.lv}">${LVL_KO[s.lv]}</div>
+            <div class="fctemp">${s.temp.toFixed(0)}°</div>
+            <div class="fchour">${String(s.hour).padStart(2,'0')}시</div>
+          </div>`).join('')}
+      </div>
+    </div>`);
+
+  if (peak) {
+    const c = {safe:'var(--lv-safe)',caution:'var(--lv-caution)',watch:'var(--lv-watch)',alert:'var(--lv-alert)'}[peak.lv];
+    setH('shortFcPeak', `▶ 최고 위험: <span style="color:${c};font-weight:700">${String(peak.hour).padStart(2,'0')}시 ${LVL_KO[peak.lv]} (${(peak.risk*100).toFixed(1)}%)</span> — 기온 ${peak.temp.toFixed(1)}°C · 풍속 ${peak.wind.toFixed(1)}m/s`);
+  }
 }
 
-function onRegionChange() {
-  currentRegion = document.getElementById('regionSelect').value;
-  updateRegionNote(currentRegion);
-  fetchAllData();
-}
-
-function switchGuide(btn, id) {
-  document.querySelectorAll('.gtab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.gcontent').forEach(c=>c.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('guide-'+id).classList.add('active');
-}
-
-
-// ════════════════════════════════════════
-// AX · Claude AI 분석 엔진 (기술 검증 가이드 전용)
-// ════════════════════════════════════════
-
-// ── Groq API 설정 (완전 무료, 신용카드 불필요) ──
-const GROQ_API   = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';  // 무료 최고성능 모델
-
-// ★ Groq API 키 (무료 - 여기에 직접 입력)
-const GROQ_KEY = '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';  // ← gsk_... 키를 여기에 붙여넣기
-
-function getApiKey() {
-  // 우선순위: 하드코딩 키 → localStorage 개인키 → 없음
-  if (GROQ_KEY) return GROQ_KEY;
-  return localStorage.getItem('emi_groq_key') || '';
-}
-
-let chatMessages = [];
-
-// 현재 기상 컨텍스트 빌드
-function buildWeatherContext() {
-  if (!weatherData) return '기상 데이터 없음';
-  const w = weatherData;
-  const emi = calcEMI(w);
-  const lv  = emiLevel(emi.total);
-  const facLines = FACILITIES.map(f => {
-    const r = calcFacilityEMI(f, w);
-    const lv2 = emiLevel(r.score);
-    return '  ' + f.fullName + ': EMI ' + r.score + '점(' + lv2.level + ')' +
-      (r.issues.length ? ' | ' + r.issues.join(', ') : ' | 이상없음');
-  }).join('\n');
-  return '【현재 기상 · ' + currentRegion + ' · ' + new Date().toLocaleTimeString('ko-KR') + '】\n' +
-    '기온: ' + w.TMP + '°C (체감 ' + (w.ATMP || '--') + '°C)\n' +
-    '습도: ' + w.REH + '%\n' +
-    '풍속: ' + w.WSD + 'm/s / 돌풍: ' + (w.WSG || '--') + 'm/s\n' +
-    '풍향: ' + w.VEC_STR + '(' + w.VEC_DEG + '°)\n' +
-    '강수: ' + w.PCP + 'mm/h\n' +
-    '기압: ' + w.PRS + 'hPa\n\n' +
-    '【EMI 종합 ' + emi.total + '/100 · ' + lv.level + '】\n' +
-    '온도' + emi.factors.temp + '/습도' + emi.factors.hum + '/풍속' + emi.factors.wind +
-    '/강수' + emi.factors.rain + '/기압' + emi.factors.press + '\n\n' +
-    '【방지시설 현황】\n' + facLines;
-}
-
-// 시스템 프롬프트 - 기술 검증된 사항만
-const SYSTEM_PROMPT = '당신은 여수 석유화학산단 대기오염 방지시설 전문 분석 AI입니다.\n\n' +
-  '【반드시 준수할 원칙】\n' +
-  '1. 국내외 공인 기준·법령·학술적으로 이견 없이 확립된 사실만 안내합니다\n' +
-  '2. 모든 수치는 출처(법령명·고시·기술기준명)를 반드시 명시합니다\n' +
-  '3. 현재 측정된 기상 수치를 직접 인용하여 판단 근거를 제시합니다\n' +
-  '4. 추정·예측 표현은 기상학적으로 확립된 패턴에 한해서만 사용합니다\n' +
-  '5. 사업장별로 다를 수 있는 내용, 논란이 있는 내용은 안내하지 않습니다\n' +
-  '6. 모호한 표현 없이 조건-결과 형식으로 명확하게 작성합니다\n' +
-  '   예: "현재 습도 OO%는 임계값 80% 초과 → 여과포 차압 1.5배 이상 상승 확인됨(KOSHA 2022)"\n\n' +
-  '전문 기준: 대기환경보전법·방지시설운영기술기준(국립환경과학원)·KOSHA GUIDE·KS 표준·TMS운영지침\n' +
-  '답변: 간결·실무적·수치 명시·한국어';
-
-// ── 공통 AI 호출 (Groq - 무료) ──
-async function callClaude(messages, maxTokens) {
-  maxTokens = maxTokens || 1000;
-  if (!getApiKey()) {
-    // 키가 없으면 모달 대신 탭에 안내 표시
-    var activeOut = document.getElementById('analyzeOutput') ||
-                    document.getElementById('riskOutput');
-    if (activeOut) {
-      activeOut.className = 'ax-output';
-      activeOut.textContent = '⚙️ API 키 미설정\n\n관리자에게 문의하거나\n우측 상단 🔑 버튼을 클릭하여 키를 입력하세요.';
-    }
-    throw new Error('API_KEY_REQUIRED');
+// ── 오늘 하루 전체 시간별 차트 (00~23시) ──
+function renderAlldayFc() {
+  const fc = D.todayFc;
+  if (!fc.length) {
+    setH('alldayArea','<div style="text-align:center;padding:16px;color:var(--lv-watch);font-size:11px">⚠ 오늘 예보 데이터 없음 — GitHub Actions 미실행 또는 수신 오류</div>');
+    return;
   }
 
-  // system 메시지를 OpenAI 형식으로 변환
-  var fullMessages = [{ role: 'system', content: SYSTEM_PROMPT }].concat(messages);
+  const nowH = new Date(Date.now()+9*3600000).getUTCHours();
 
-  const res = await fetch(GROQ_API, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + getApiKey()
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      max_tokens: maxTokens,
-      messages: fullMessages,
-      temperature: 0.3   // 낮은 온도 = 일관성 있는 기술 답변
-    })
+  // 각 시간 위험도 계산
+  const slots = fc.map(f => {
+    const R = calcRisk(f.temp, f.hum, f.wind, f.rain, D.so2, D.pm25, D.dt24);
+    return { ...f, pChem:R.pChem, pFall:R.pFall, pEnv:R.pEnv,
+             risk:R.total, lv:levelOf(R.total) };
   });
 
-  if (!res.ok) {
-    const e = await res.json().catch(function(){ return {}; });
-    const msg = e.error ? e.error.message : 'HTTP ' + res.status;
-    throw new Error(msg);
+  const maxR   = Math.max(...slots.map(s=>s.risk));
+  const peak   = slots.reduce((a,b)=>b.risk>a.risk?b:a, slots[0]);
+  const safest = slots.reduce((a,b)=>b.risk<a.risk?b:a, slots[0]);
+
+  // 날씨 아이콘
+  const skyIcon = (sky, pty) => {
+    if (pty==='1'||pty==='4') return '🌧';
+    if (pty==='2') return '🌨';
+    if (pty==='3') return '❄';
+    if (sky==='4') return '☁';
+    if (sky==='3') return '⛅';
+    return '☀';
+  };
+
+  // 현재 시간 표시용 인덱스
+  const nowIdx = slots.findIndex(s=>s.hour===nowH);
+
+  // ── 차트 HTML ──
+  // 가로 스크롤 타임라인 형태
+  const bars = slots.map((s,i) => {
+    const isNow = s.hour === nowH;
+    const isPast = s.hour < nowH;
+    const barH = maxR > 0 ? (s.risk/maxR*100).toFixed(0) : 4;
+    const opacity = isPast ? '0.35' : '1';
+    const nowMark = isNow
+      ? `<div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--ac);white-space:nowrap;font-family:var(--mono)">▼NOW</div>`
+      : '';
+    return `
+      <div class="fccol" style="opacity:${opacity};position:relative;min-width:38px;">
+        ${nowMark}
+        <div class="fcbarwrap">
+          <div class="fcbar ${s.lv}" style="height:${barH}%"
+            title="${s.hour}시 — ${LVL_KO[s.lv]} (${(s.risk*100).toFixed(1)}%)&#10;기온 ${s.temp.toFixed(1)}°C · 풍속 ${s.wind.toFixed(1)}m/s"></div>
+        </div>
+        <div class="fclvl ${s.lv}">${LVL_KO[s.lv]}</div>
+        <div style="font-size:9px;color:var(--txd);font-family:var(--mono)">${skyIcon(s.sky,s.pty)}</div>
+        <div class="fctemp">${s.temp.toFixed(0)}°</div>
+        <div class="fchour" style="${isNow?'color:var(--ac);font-weight:700':''}">${String(s.hour).padStart(2,'0')}시</div>
+      </div>`;
+  }).join('');
+
+  setH('alldayArea', `<div class="fcwrap"><div class="fcbars" style="padding-top:18px">${bars}</div></div>`);
+
+  // ── 요약 메타 ──
+  const peakC  = {safe:'var(--lv-safe)',caution:'var(--lv-caution)',watch:'var(--lv-watch)',alert:'var(--lv-alert)'}[peak.lv];
+  const safeC  = {safe:'var(--lv-safe)',caution:'var(--lv-caution)',watch:'var(--lv-watch)',alert:'var(--lv-alert)'}[safest.lv];
+  const nowSlot = slots.find(s=>s.hour===nowH) || slots[0];
+
+  // 유형별 하루 최고 위험시간
+  const peakChem = slots.reduce((a,b)=>b.pChem>a.pChem?b:a,slots[0]);
+  const peakFall = slots.reduce((a,b)=>b.pFall>a.pFall?b:a,slots[0]);
+  const peakEnv  = slots.reduce((a,b)=>b.pEnv >a.pEnv ?b:a,slots[0]);
+
+  setH('alldayMeta', `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:2px;">
+      <div style="background:var(--sur2);border:1px solid var(--bdr);padding:7px 8px;">
+        <div style="font-size:9px;color:var(--txd);margin-bottom:3px">&#9201; 현재 (${String(nowH).padStart(2,'0')}시)</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:${{safe:'var(--lv-safe)',caution:'var(--lv-caution)',watch:'var(--lv-watch)',alert:'var(--lv-alert)'}[nowSlot?.lv||'safe']}">${LVL_KO[nowSlot?.lv||'safe']}</div>
+        <div style="font-size:9px;color:var(--txd);margin-top:2px">${nowSlot?.temp.toFixed(1)||'?'}°C · ${nowSlot?.wind.toFixed(1)||'?'}m/s</div>
+      </div>
+      <div style="background:var(--sur2);border:1px solid var(--bdr);padding:7px 8px;">
+        <div style="font-size:9px;color:var(--txd);margin-bottom:3px">&#128308; 최고 위험</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:${peakC}">${String(peak.hour).padStart(2,'0')}시 ${LVL_KO[peak.lv]}</div>
+        <div style="font-size:9px;color:var(--txd);margin-top:2px">${peak.temp.toFixed(1)}°C · ${peak.wind.toFixed(1)}m/s</div>
+      </div>
+      <div style="background:var(--sur2);border:1px solid var(--bdr);padding:7px 8px;">
+        <div style="font-size:9px;color:var(--txd);margin-bottom:3px">&#128994; 가장 안전</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:${safeC}">${String(safest.hour).padStart(2,'0')}시 ${LVL_KO[safest.lv]}</div>
+        <div style="font-size:9px;color:var(--txd);margin-top:2px">${safest.temp.toFixed(1)}°C · ${safest.wind.toFixed(1)}m/s</div>
+      </div>
+      <div style="background:var(--sur2);border:1px solid var(--bdr);padding:7px 8px;">
+        <div style="font-size:9px;color:var(--txd);margin-bottom:3px">&#9203; 유형별 최고위험</div>
+        <div style="font-size:9px;color:var(--txd);line-height:1.8">
+          &#128308; ${String(peakChem.hour).padStart(2,'0')}시
+          &nbsp;&#128993; ${String(peakFall.hour).padStart(2,'0')}시
+          &nbsp;&#128309; ${String(peakEnv.hour).padStart(2,'0')}시
+        </div>
+      </div>
+    </div>`);
+
+  setT('allday-src', `기상청 단기예보 · ${slots.length}개 시간대`);
+}
+
+// ── 가이드 ──
+const GUIDES = {
+  safe:   { cls:'safe',    items:['정기 순찰 유지','배관&#183;플랜지 외관 이상 여부 확인','기상 변화 모니터링'] },
+  caution:{ cls:'caution', items:['풍속 추이 집중 감시 (3m/s 이하 즉시 보고)','배관 주요 플랜지 가스 농도 확인 시작','고소 작업자 열피로 징후 사전 점검','PM2.5 상승 시 RTO 차압 사전 확인'] },
+  watch:  { cls:'watch',   items:['&#128308; 가스 감지기 경보 수준 하향 조정 검토','&#128308; 플랜지 수동 가스 농도 측정 실시','&#128993; 고소 작업 2인 1조 필수 확인','&#128993; 30분마다 작업자 열피로 상태 점검','&#128309; RTO 차압 계측기 현재값 기록','비상 연락 체계 점검'] },
+  alert:  { cls:'alert',   items:['&#128308; 해당 구역 용접&#183;불꽃 작업 즉시 중단','&#128308; 안전밸브&#183;압력계 전수 긴급 점검','&#128308; 환기팬 최대 출력 가동','&#128993; 위험 구역 고소 작업 전면 중단','&#128309; RTO 비상 정지 프로세스 준비','&#9888; 비상 대응 계획 발동 검토'] }
+};
+function renderGuide(lvl) {
+  const g = GUIDES[lvl];
+  const c = {safe:'var(--lv-safe)',caution:'var(--lv-caution)',watch:'var(--lv-watch)',alert:'var(--lv-alert)'}[lvl];
+  setH('guideContent',`
+    <div class="gtitle ${g.cls}">${LVL_KO[lvl]} 단계</div>
+    <div class="guide-items">
+      ${g.items.map(i=>`<div class="gi">${i}</div>`).join('')}
+    </div>`);
+}
+
+// ── 사례 카드 조건부 ──
+function buildCases({ pChem, pFall, pEnv }) {
+  const T=D.temp??20, W=D.wind??5, DT=D.dt24??1, R=D.rain??0, P=D.pm25??20;
+  const chemOn = pChem >= 0.30;
+  const fallOn = pFall >= 0.30;
+  const envOn  = pEnv  >= 0.30;
+
+  document.getElementById('cc-chem').classList.toggle('show', chemOn);
+  document.getElementById('cc-fall').classList.toggle('show', fallOn);
+  document.getElementById('cc-env').classList.toggle('show', envOn);
+  document.getElementById('noCase').style.display = (chemOn||fallOn||envOn)?'none':'block';
+
+  if (chemOn) {
+    const lv=levelOf(pChem);
+    setH('cc-lv-chem',`<span class="casec-lvb ${lv==='alert'?'alert':'watch'}">${LVL_KO[lv]}</span>`);
+    setT('cc-trig-chem',`저풍속 ${W.toFixed(1)}m/s · ΔT ${DT.toFixed(1)}°C 감지`);
   }
-
-  const data = await res.json();
-  const tokEl = document.getElementById('axTokens');
-  if (tokEl && data.usage) {
-    tokEl.textContent = '무료 · 입력 ' + data.usage.prompt_tokens +
-      ' + 출력 ' + data.usage.completion_tokens + ' 토큰';
+  if (fallOn) {
+    const lv=levelOf(pFall);
+    setH('cc-lv-fall',`<span class="casec-lvb ${lv==='alert'?'alert':'watch'}">${LVL_KO[lv]}</span>`);
+    setT('cc-trig-fall',`기온 ${T.toFixed(1)}°C · 강수 ${R.toFixed(1)}mm 감지`);
   }
-  return data.choices && data.choices[0] ? data.choices[0].message.content : '';
-}
-
-// 탭 전환
-function switchAxTab(btn, id) {
-  document.querySelectorAll('.ax-tab').forEach(function(b){ b.classList.remove('active'); });
-  document.querySelectorAll('.ax-tab-content').forEach(function(c){ c.classList.remove('active'); });
-  btn.classList.add('active');
-  document.getElementById(id).classList.add('active');
-}
-
-// 타이핑 효과
-async function typeOut(el, text) {
-  el.textContent = '';
-  for (var i = 0; i < text.length; i++) {
-    el.textContent += text[i];
-    if (i % 5 === 0) await new Promise(function(r){ setTimeout(r, 6); });
+  if (envOn) {
+    const lv=levelOf(pEnv);
+    setH('cc-lv-env',`<span class="casec-lvb ${lv==='alert'?'alert':'watch'}">${LVL_KO[lv]}</span>`);
+    setT('cc-trig-env',`PM2.5 ${P!==null&&!isNaN(P)?P.toFixed(0):'?'}μg/m³ 감지`);
   }
 }
 
-// ── 탭1: 종합 분석 ──
-async function runAIAnalysis() {
-  if (!weatherData) { alert('새로고침으로 기상 데이터를 먼저 수집하세요'); return; }
-  var btn = document.getElementById('btnAnalyze');
-  var out = document.getElementById('analyzeOutput');
-  btn.disabled = true; btn.textContent = '⏳ 분석 중...';
-  out.className = 'ax-output streaming'; out.textContent = '';
-  document.querySelectorAll('.ax-tab')[0].click();
-
-  var prompt = '아래 실측 기상 데이터를 기반으로 방지시설 종합 분석을 수행하세요.\n' +
-    '공인 기술 기준과 법령 근거를 수치와 함께 명시합니다.\n\n' +
-    buildWeatherContext() + '\n\n' +
-    '다음 형식으로 작성하세요:\n\n' +
-    '## 🎯 현황 요약\n(현재 기상 수치 인용, 3줄 이내, EMI 수준 판정 근거 포함)\n\n' +
-    '## ⚡ 위험 리스크 (공인 기준 근거)\n' +
-    '각 리스크:\n[시설명] | 위험도: 위험/주의/경계/정상\n' +
-    '- 원인: 현재 [측정값]이 임계값 [기준값] 초과/미만 (출처: 법령/고시명)\n' +
-    '- 영향: [수치 포함 구체적 기술 영향]\n\n' +
-    '## 🔧 즉시 조치사항 (이견 없는 확립된 조치만)\n' +
-    '- [시설] [조치] → 기준수치 (근거: OOO)\n\n' +
-    '## 📊 운전 파라미터 조정 권고 (기술기준 범위 내)\n' +
-    '- [시설] [파라미터]: [현재값] → [조정값] (근거: OOO)\n\n' +
-    '## 📅 모니터링 포인트 (TMS·계측값 기준)\n' +
-    '- [감시항목]: [주기] / 조치기준 [수치] (근거: OOO)';
-
-  try {
-    var text = await callClaude([{role:'user', content: prompt}], 1300);
-    out.className = 'ax-output';
-    await typeOut(out, text);
-  } catch(e) {
-    out.className = 'ax-output';
-    if (e.message !== 'API_KEY_REQUIRED') out.textContent = '⚠ ' + e.message;
-  }
-  btn.disabled = false; btn.textContent = '🧠 AI 종합 분석';
+// ══════════════════════════════════════════
+//  DOM 헬퍼
+// ══════════════════════════════════════════
+function setT(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+function setH(id,v){const e=document.getElementById(id);if(e)e.innerHTML=v;}
+function setWv(id,val,unit,lvl){
+  const e=document.getElementById(id); if(!e) return;
+  if(val===null||val===undefined||(typeof val==='number'&&isNaN(val))){e.innerHTML='<span class="wv" style="color:var(--txd)">-</span>';return;}
+  const cls=lvl==='w'?' w':lvl==='r'?' r':'';
+  e.innerHTML=`<span class="wv${cls}">${val}</span><span class="wu">${unit}</span>`;
 }
-
-// ── 탭2: 리스크 평가 ──
-async function runRiskEval() {
-  if (!weatherData) { alert('기상 데이터 필요'); return; }
-  var out = document.getElementById('riskOutput');
-  out.className = 'ax-output streaming'; out.textContent = '';
-
-  var prompt = '현재 기상 데이터 기준 방지시설별 리스크를 평가하세요.\n' +
-    '법령·고시·공인 기술기준에 명시된 수치 기준만 사용합니다.\n\n' +
-    buildWeatherContext() + '\n\n' +
-    '각 방지시설(백필터/습식세정탑/전기집진기/RTO)별:\n' +
-    '[시설명]\n' +
-    '- 위험도: 위험/주의/경계/정상\n' +
-    '- 임계 초과 항목: [파라미터] 현재 __[단위] / 기준 __[단위] (출처: __)\n' +
-    '- 기술적 영향: [수치 포함]\n' +
-    '- TMS 기준 초과 위험: 있음/없음 (배출허용기준: __)';
-
-  try {
-    var text = await callClaude([{role:'user', content: prompt}], 1000);
-    out.className = 'ax-output';
-    await typeOut(out, text);
-  } catch(e) {
-    out.className = 'ax-output';
-    if (e.message !== 'API_KEY_REQUIRED') out.textContent = '⚠ ' + e.message;
-  }
+function stH(v,t,dir='o'){
+  const bad=dir==='o'?v>=t:v<=t;
+  return bad?'<span class="twn">⚠ 초과</span>':'<span class="tok">✓ 정상</span>';
 }
-
-// ── 탭3: EMI 예측 ──
-async function runAIPredict() {
-  if (!weatherData) { alert('기상 데이터 필요'); return; }
-  var btn = document.getElementById('btnPredict');
-  btn.disabled = true; btn.textContent = '⏳ 예측 중...';
-  document.querySelectorAll('.ax-tab')[2].click();
-  var out = document.getElementById('predictOutput');
-  out.innerHTML = '<div class="ax-placeholder"><div class="ax-placeholder-ico">🔮</div><div class="ax-placeholder-txt">기상 패턴 분석 중...</div></div>';
-
-  var prompt = '현재 기상과 기상학적 확립 패턴(일교차·해풍육풍·계절특성)으로 EMI를 예측하세요.\n' +
-    '불확실한 예측 제외, 확립된 패턴만 반영합니다.\n\n' +
-    buildWeatherContext() + '\n\n' +
-    'JSON만 출력:\n{"predictions":[' +
-    '{"hour":"+1h","emi":숫자,"level":"정상|경계|주의|위험","reason":"기상학적근거"},' +
-    '{"hour":"+2h","emi":숫자,"level":"정상|경계|주의|위험","reason":"기상학적근거"},' +
-    '{"hour":"+3h","emi":숫자,"level":"정상|경계|주의|위험","reason":"기상학적근거"},' +
-    '{"hour":"+6h","emi":숫자,"level":"정상|경계|주의|위험","reason":"기상학적근거"}' +
-    '],"trend":"상승|하강|유지","peak":"최대위험시간대","action":"사전대비조치한줄"}';
-
-  try {
-    var raw  = await callClaude([{role:'user', content: prompt}], 500);
-    var pred = JSON.parse(raw.replace(/```json|```/g,'').trim());
-    var lc   = {'정상':'var(--green)','경계':'var(--yellow)','주의':'var(--orange)','위험':'var(--red)'};
-    out.innerHTML = '<div class="ax-predict-row">' +
-      pred.predictions.map(function(p){
-        return '<div class="ax-predict-card">' +
-          '<div class="ax-predict-time">' + p.hour + '</div>' +
-          '<div class="ax-predict-score" style="color:' + (lc[p.level]||'#fff') + '">' + p.emi + '</div>' +
-          '<div class="ax-predict-label" style="color:' + (lc[p.level]||'#fff') + '">' + p.level + '</div>' +
-          '<div style="font-size:9px;color:var(--text3);margin-top:4px;line-height:1.4;">' + p.reason + '</div>' +
-          '</div>';
-      }).join('') +
-      '</div>' +
-      '<div style="margin-top:10px;padding:10px 12px;background:rgba(0,0,0,.2);border-radius:8px;border-left:3px solid var(--accent);">' +
-      '<div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px;">📈 트렌드: ' + pred.trend + ' | ' + pred.peak + '</div>' +
-      '<div style="font-size:11px;color:var(--text2);">🔧 ' + pred.action + '</div>' +
-      '</div>';
-  } catch(e) {
-    out.innerHTML = '<div class="ax-placeholder"><div class="ax-placeholder-txt" style="color:var(--red)">⚠ ' +
-      (e.message !== 'API_KEY_REQUIRED' ? e.message : '') + '</div></div>';
-  }
-  btn.disabled = false; btn.textContent = '📈 EMI 예측';
+function lvlSpan(lv){
+  const c={safe:'tok',caution:'',watch:'twn',alert:'tdg'}[lv];
+  const col={safe:'var(--lv-safe)',caution:'var(--lv-caution)',watch:'var(--lv-watch)',alert:'var(--lv-alert)'}[lv];
+  return `<span style="color:${col}">${LVL_KO[lv]}</span>`;
 }
-
-// ── 탭4: AI 질의응답 ──
-async function sendChat() {
-  var input   = document.getElementById('chatInput');
-  var sendBtn = document.getElementById('chatSend');
-  var msg = input.value.trim();
-  if (!msg || sendBtn.disabled) return;
-  if (!weatherData) { appendChat('ai','⚠ 기상 데이터를 먼저 수집하세요'); return; }
-  input.value = ''; sendBtn.disabled = true;
-  appendChat('user', msg);
-
-  if (chatMessages.length === 0) {
-    chatMessages.push({ role:'user',
-      content: '[기상 컨텍스트]\n' + buildWeatherContext() + '\n\n질문: ' + msg });
-  } else {
-    chatMessages.push({ role:'user', content: msg });
-  }
-  var thinking = appendChat('ai', '분석 중...', true);
-
-  try {
-    var reply = await callClaude(chatMessages, 700);
-    chatMessages.push({ role:'assistant', content: reply });
-    thinking.classList.remove('thinking');
-    thinking.textContent = reply;
-    document.getElementById('chatHistory').scrollTop = 99999;
-  } catch(e) {
-    thinking.classList.remove('thinking');
-    if (e.message !== 'API_KEY_REQUIRED') {
-      thinking.textContent = '⚠ ' + e.message;
-      chatMessages.pop();
-    } else { thinking.remove(); chatMessages.pop(); }
-  }
-  sendBtn.disabled = false; input.focus();
+function setSrc(key,state,label){
+  const d=document.getElementById('dot-'+key);
+  const s=document.getElementById('src-'+key);
+  if(d){d.className='ds-dot '+state;}
+  if(s){s.textContent=label;}
 }
+function setSrcAll(state,label){['rt','fc','mid','air'].forEach(k=>setSrc(k,state,label));}
 
-function quickAsk(q) {
-  document.getElementById('chatInput').value = q;
-  document.querySelectorAll('.ax-tab')[3].click();
-  sendChat();
-}
+// ── 모달 ──
+function openModal(id){const e=document.getElementById('modal-'+id);if(e)e.classList.add('open');}
+function closeModal(id){const e=document.getElementById('modal-'+id);if(e)e.classList.remove('open');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.overlay.open').forEach(m=>m.classList.remove('open'));});
 
-function appendChat(role, text, isThinking) {
-  var hist = document.getElementById('chatHistory');
-  var div  = document.createElement('div');
-  div.className = 'ax-msg ' + role + (isThinking ? ' thinking' : '');
-  div.textContent = text;
-  hist.appendChild(div);
-  hist.scrollTop = 99999;
-  return div;
-}
+// ── 시계 ──
+setInterval(()=>setT('clock',new Date().toLocaleTimeString('ko-KR',{hour12:false})),1000);
+setT('clock',new Date().toLocaleTimeString('ko-KR',{hour12:false}));
 
-// ── API 키 모달 ──
-// 키 관리 (헤더 🔑 버튼)
-function openKeyManager() { showApiKeyModal(); }
-
-function showApiKeyModal() {
-  if (document.getElementById('apiKeyModal')) return;
-  var builtIn = (GROQ_KEY && GROQ_KEY.length > 10);
-  var saved   = localStorage.getItem('emi_groq_key');
-  var m = document.createElement('div');
-  m.id = 'apiKeyModal';
-  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-  m.innerHTML =
-    '<div style="background:#0e2040;border:1px solid var(--accent);border-radius:14px;padding:28px;max-width:480px;width:100%;">' +
-    '<div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:10px;">🔑 Groq AI 키 관리</div>' +
-    '<div style="background:rgba(0,0,0,.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:11px;">' +
-    (builtIn ? '<div style="color:var(--green);">✅ 공용 내장 키 사용 중 — 추가 입력 불필요</div>' : '<div style="color:var(--red);">⚠ 내장 키 없음</div>') +
-    (saved   ? '<div style="color:var(--accent);margin-top:3px;">✅ 개인 키 저장됨</div>' : '') +
-    '</div>' +
-    '<div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.8;">' +
-    '개인 키 입력 시 공용 키보다 우선 적용 · ' +
-    '<a href="https://console.groq.com/" target="_blank" style="color:var(--accent);">console.groq.com</a> 무료 발급' +
-    '</div>' +
-    '<input id="apiKeyInput" type="password" style="width:100%;background:rgba(0,0,0,.3);border:1px solid var(--border2);color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;font-family:var(--mono);margin-bottom:10px;outline:none;" placeholder="gsk_..." />' +
-    '<div style="display:flex;gap:8px;">' +
-    '<button onclick="saveApiKey()" style="flex:1;background:var(--accent);border:none;color:#000;padding:10px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">✓ 저장</button>' +
-    (saved ? '<button onclick="clearApiKey()" style="background:rgba(255,80,80,.2);border:1px solid var(--red);color:var(--red);padding:10px 14px;border-radius:8px;cursor:pointer;font-size:12px;">개인키 삭제</button>' : '') +
-    '<button onclick="closeApiModal()" style="background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px;">닫기</button>' +
-    '</div></div>';
-  document.body.appendChild(m);
-  setTimeout(function(){ var i=document.getElementById('apiKeyInput'); if(i) i.focus(); }, 100);
-}
-
-function closeApiModal() {
-  var m = document.getElementById('apiKeyModal');
-  if (m) m.remove();
-}
-
-function saveApiKey() {
-  var key = document.getElementById('apiKeyInput').value.trim();
-  if (!key) { var _m=document.getElementById('apiKeyModal'); if(_m)_m.remove(); return; }
-  if (!key.startsWith('gsk_')) { alert('Groq 키 형식 오류 (gsk_ 로 시작해야 합니다)'); return; }
-  localStorage.setItem('emi_groq_key', key);
-  var _m2=document.getElementById('apiKeyModal'); if(_m2)_m2.remove();
-  updateKeyStatus(); runAIAnalysis();
-}
-
-function clearApiKey() {
-  localStorage.removeItem('emi_groq_key');
-  var _m3=document.getElementById('apiKeyModal'); if(_m3)_m3.remove();
-  updateKeyStatus();
-}
-
-function updateKeyStatus() {
-  var st = document.getElementById('axModel'); if (!st) return;
-  var builtIn = (GROQ_KEY && GROQ_KEY.length > 10);
-  var saved   = localStorage.getItem('emi_groq_key');
-  if (saved)         st.textContent = '✅ 개인 Groq 키 · ' + GROQ_MODEL + ' · 무료';
-  else if (builtIn)  st.textContent = '✅ 공용 Groq 키 내장 · ' + GROQ_MODEL + ' · 무료';
-  else               st.textContent = '⚪ Groq 키 미설정 · 🔑 버튼으로 입력';
-}
-
-
-// 페이지 로드 시 키 상태 표시
-setTimeout(updateKeyStatus, 300);
-
-
-window.addEventListener('load', () => {
-  // ① 로딩 화면 즉시 제거 (API 결과 기다리지 않음)
-  document.getElementById('loadingOverlay').style.display = 'none';
-
-  // ② 기상 데이터는 백그라운드에서 수집
-  fetchAllData();
-
-  // ③ 5분마다 자동 갱신
-  setInterval(fetchAllData, 5 * 60 * 1000);
-});
+// ── 초기 실행 ──
+loadAll();
+setInterval(loadAll, 10*60*1000); // 10분마다 재로드
 </script>
 </body>
 </html>
